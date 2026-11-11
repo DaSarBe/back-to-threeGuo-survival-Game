@@ -9,7 +9,7 @@ import { clamp, lerp, rnd, turnTo, dist2 } from './util.js';
 
 const PI = Math.PI;
 const keys = {}, mouse = { l: false, r: false };
-const touch = { mx: 0, mz: 0, fire: false, joyId: null, lookId: null, fireId: null, jx: 0, jy: 0, lx: 0, ly: 0 };
+const touch = { mx: 0, mz: 0, fire: false, joyId: null, lookId: null, fireId: null, fx: 0, fy: 0, jx: 0, jy: 0, lx: 0, ly: 0 };
 const V = new THREE.Vector3(), D = new THREE.Vector3(), O = new THREE.Vector3(), T = new THREE.Vector3();
 let jumpQ = false, eCd = 0, interact = null, interactT = 0, vmCur = null, flashT = 0, muzzle;
 const vms = {};
@@ -374,7 +374,7 @@ export function initInput(canvas) {
       const el = t.target.closest && t.target.closest('[data-act]');
       if (el) {
         const a = el.dataset.act;
-        if (a === 'fire') { touch.fire = true; touch.fireId = t.identifier; touch.lx = t.clientX; touch.ly = t.clientY; }
+        if (a === 'fire') { touch.fire = true; touch.fireId = t.identifier; touch.fx = t.clientX; touch.fy = t.clientY; }
         else if (a === 'aim') { mouse.r = !mouse.r; el.classList.toggle('on', mouse.r); }
         else if (a === 'quest') el.classList.toggle('open');
         else act(a);
@@ -393,9 +393,12 @@ export function initInput(canvas) {
         let dx = t.clientX - touch.jx, dy = t.clientY - touch.jy; const d = Math.hypot(dx, dy), m = 55;
         if (d > m) { dx *= m / d; dy *= m / d; }
         touch.mx = dx / m; touch.mz = -dy / m; knob.style.transform = `translate(${dx}px,${dy}px)`;
-      } else if (t.identifier === touch.lookId || t.identifier === touch.fireId) {
-        if (!G.menu) look(t.clientX - touch.lx, t.clientY - touch.ly, 0.0055 * lerp(1, 0.4, P.aim));
+      } else if (t.identifier === touch.lookId) {
+        look(t.clientX - touch.lx, t.clientY - touch.ly, 0.0055 * lerp(1, 0.4, P.aim));
         touch.lx = t.clientX; touch.ly = t.clientY;
+      } else if (t.identifier === touch.fireId) { // 開火鍵上的手指各自記錄位置，不與視角手指共用
+        look(t.clientX - touch.fx, t.clientY - touch.fy, 0.0055 * lerp(1, 0.4, P.aim));
+        touch.fx = t.clientX; touch.fy = t.clientY;
       }
     }
     e.preventDefault();
