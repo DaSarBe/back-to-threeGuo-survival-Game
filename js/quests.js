@@ -3,6 +3,8 @@ import { audio } from './audio.js';
 import { ITEMS, ACTORS, ATTENDANTS, ATTENDANT_COST, ATTENDANT_MAX, RECIPES, WEAPONS, GENERAL_COST } from './data.js';
 import { world } from './world.js';
 import * as SQ from './squad.js';
+import * as OD from './orders.js';
+import { raining } from './weather.js';
 
 export const QUESTS = [
   { t: '亂世求生', d: '打開身旁的軍火箱，然後前往東南方的劉備軍營，找劉備談談。', site: 'camp' },
@@ -60,7 +62,7 @@ function hireNode(a, note = '') {
   return {
     text: (note ? `（${note}）\n` : '') + HIRE[a.id] + '\n（招攬只需付一次，之後可隨時同行或回營。）',
     opts: [
-      { t: `付 🪙${c.coin}`, dis: !SQ.canPay({ coin: c.coin }), fn: go(false) },
+      { t: `付 🪙${OD.price(SQ.LORD_OF[a.id], c.coin)}`, dis: !SQ.canPay({ coin: OD.price(SQ.LORD_OF[a.id], c.coin) }), fn: go(false) },
       { t: `付 ${SQ.costText(c.res)}`, dis: !SQ.canPay(c.res), fn: go(true) },
       { t: '返回', fn: () => dialogFor(a) },
     ],
@@ -68,7 +70,7 @@ function hireNode(a, note = '') {
 }
 function followOpt(a) {
   if (!SAY[a.id] || !SQ.isUnlocked(a.id)) return [];
-  if (!SQ.isHired(a.id)) { const c = GENERAL_COST[a.id]; return [{ t: `招攬 ${a.name}（🪙${c.coin} 或 ${SQ.costText(c.res)}）`, fn: () => hireNode(a) }]; }
+  if (!SQ.isHired(a.id)) { const c = GENERAL_COST[a.id]; return [{ t: `招攬 ${a.name}（🪙${OD.price(SQ.LORD_OF[a.id], c.coin)} 或 ${SQ.costText(c.res)}）`, fn: () => hireNode(a) }]; }
   if (a.follow) return [{ t: '請回營待命。', fn: () => { SQ.setGeneralFollow(a, false); return { text: '好，若有戰事，隨時來喚。' }; } }];
   return [{
     t: `請隨我出征！（佔 2 名額，目前 ${SQ.squadUsed()}/${SQ.squadCap()}）`, fn: () => {
@@ -81,16 +83,23 @@ function followOpt(a) {
 // ---------- 招兵買馬 ----------
 function recruitNode(lord, note = '') {
   const r = SQ.lordRecruits(lord.id), P = G.player;
+  const tier = OD.repTier(lord.id);
   const opts = r.units.map(u => ({
-    t: `招募 ${ACTORS[u.id].short}　🪙${u.coin} 或 ${SQ.costText(u.res)}`,
+    t: `招募 ${ACTORS[u.id].short}　🪙${OD.price(lord.id, u.coin)} 或 ${SQ.costText(u.res)}`,
     fn: () => unitNode(lord, u),
   }));
+  let eliteNote = '';
+  if (r.elite) {
+    const e = { ...r.elite, elite: true };
+    if (tier.elite) opts.unshift({ t: `★ 招募精銳 ${ACTORS[e.id].short}　🪙${OD.price(lord.id, e.coin)} 或 ${SQ.costText(e.res)}`, fn: () => unitNode(lord, e) });
+    else eliteNote = `\n（聲望達到「摯友」可招募精銳「${ACTORS[e.id].short}」——多接幾張軍火訂單吧）`;
+  }
   const sp = r.attendant, A = ATTENDANTS[sp];
   if (!SQ.ownsAttendant(sp) && G.attendants.length < ATTENDANT_MAX)
-    opts.push({ t: `僱用侍從：${A.role}${A.name}（${A.desc}）`, fn: () => attendantBuyNode(lord, sp) });
+    opts.push({ t: `僱用侍從：${A.role}${A.name}（🪙${OD.price(lord.id, ATTENDANT_COST.coin)}）`, fn: () => attendantBuyNode(lord, sp) });
   opts.push({ t: '返回', fn: () => dialogFor(lord) });
   return {
-    text: (note ? note + '\n' : '') + `隊伍名額 ${SQ.squadUsed()}/${SQ.squadCap()}　🪙${P.count('coin')}　侍從 ${G.attendants.length}/${ATTENDANT_MAX}\n兵卒陣亡後不會復活，需要重新招募。`,
+    text: (note ? note + '\n' : '') + `隊伍名額 ${SQ.squadUsed()}/${SQ.squadCap()}　🪙${P.count('coin')}　侍從 ${G.attendants.length}/${ATTENDANT_MAX}\n聲望：${tier.n}${tier.disc < 1 ? `（${tier.disc * 10} 折）` : ''}。兵卒陣亡後不會復活，需要重新招募。` + eliteNote,
     opts,
   };
 }
@@ -100,7 +109,7 @@ function unitNode(lord, u, note = '') {
   return {
     text: (note ? `（${note}）\n` : '') + `${d.name}　生命 ${d.hp}・攻擊 ${d.dmg}\n${SQ.UNIT_DESC[u.id]}` + (full ? '\n（隊伍已滿：推進主線可帶更多人）' : ''),
     opts: [
-      { t: `付 🪙${u.coin}`, dis: full || !SQ.canPay({ coin: u.coin }), fn: go(false) },
+      { t: `付 🪙${OD.price(lord.id, u.coin)}`, dis: full || !SQ.canPay({ coin: OD.price(lord.id, u.coin) }), fn: go(false) },
       { t: `付 ${SQ.costText(u.res)}`, dis: full || !SQ.canPay(u.res), fn: go(true) },
       { t: '返回', fn: () => recruitNode(lord) },
     ],
@@ -108,18 +117,38 @@ function unitNode(lord, u, note = '') {
 }
 function attendantBuyNode(lord, sp) {
   const A = ATTENDANTS[sp], C = ATTENDANT_COST;
-  const go = useRes => () => { const err = SQ.buyAttendant(sp, useRes); return err ? recruitNode(lord, `（${err}）`) : recruitNode(lord, `✔ ${A.role}${A.name} 會跟著你，定時幫忙採集。`); };
+  const go = useRes => () => { const err = SQ.buyAttendant(sp, useRes, lord.id); return err ? recruitNode(lord, `（${err}）`) : recruitNode(lord, `✔ ${A.role}${A.name} 會跟著你，定時幫忙採集。`); };
   return {
     text: `${A.role}　${A.name}\n${A.desc}。不會打仗也不會受傷，會跟著你、時不時去採集物資。`,
     opts: [
-      { t: `付 🪙${C.coin}`, dis: !SQ.canPay({ coin: C.coin }), fn: go(false) },
+      { t: `付 🪙${OD.price(lord.id, C.coin)}`, dis: !SQ.canPay({ coin: OD.price(lord.id, C.coin) }), fn: go(false) },
       { t: `付 ${SQ.costText(C.res)}`, dis: !SQ.canPay(C.res), fn: go(true) },
       { t: '返回', fn: () => recruitNode(lord) },
     ],
   };
 }
+// ---------- 軍火訂單 ----------
+function orderNode(a, note = '') {
+  const id = a.id, mine = OD.OR.active.filter(o => o.from === id), offer = OD.offerFor(id), can = OD.deliverable(id);
+  const lines = [];
+  if (note) lines.push(note);
+  lines.push(`聲望：${OD.repTier(id).n}（${OD.OR.rep[id]}）　進行中訂單 ${OD.OR.active.length}/${OD.MAX_ACTIVE}`);
+  for (const o of mine) lines.push(`・${OD.orderText(o)}　持有 ${G.player.count(o.item)}/${o.qty}`);
+  if (offer) lines.push(`「${OD.offerLine(offer)}」\n新訂單：${OD.orderText(offer)}`);
+  else if (!mine.length) lines.push('今天沒有新訂單了，明天再來看看。');
+  const opts = [];
+  if (can.length) opts.push({ t: `交貨（${can.length} 張可交）`, fn: () => { OD.deliver(id); return orderNode(a, '✔ 已交貨，報酬已入帳。'); } });
+  if (offer) opts.push({ t: '接下這張訂單', dis: OD.OR.active.length >= OD.MAX_ACTIVE, fn: () => { const e = OD.accept(id); return orderNode(a, e ? `（${e}）` : '✔ 已接單。可在背包的「訂單」頁查看進度。'); } });
+  opts.push({ t: '返回', fn: () => dialogFor(a) });
+  return { text: lines.join('\n'), opts };
+}
+function orderOpt(a) {
+  if (!OD.ISSUERS[a.id] || G.stage < OD.ISSUERS[a.id].stage) return [];
+  const n = OD.deliverable(a.id).length;
+  return [{ t: n ? `📜 軍火訂單（可交貨 ${n} 張）` : '📜 軍火訂單', fn: () => orderNode(a) }];
+}
 function lordOpts(a) {
-  const o = [];
+  const o = [...orderOpt(a)];
   if (SQ.lordRecruits(a.id)) o.push({ t: '招兵買馬', fn: () => recruitNode(a) });
   o.push(...followOpt(a), BYE);
   return o;
@@ -150,6 +179,10 @@ function nextHint() {
   if (P.thirst < 40) tips.push('您口渴了，河邊或營中水井都能喝水。');
   if (G.world.isNight) tips.push('天黑了，狼群和賊兵會出沒，回營歇息比較安全。');
   if (G.stage >= 1 && q.boss) tips.push('敵將身邊有護體，得踏進地上的決戰圈才傷得到他。');
+  if (G.stage >= 1 && !OD.OR.active.length) tips.push('劉備和糜竺那裡有軍火訂單，準時交貨能賺錢、提升聲望。');
+  const late = OD.OR.active.filter(o => o.due <= G.day); if (late.length) tips.push(`有 ${late.length} 張訂單今天到期，別忘了交貨！`);
+  if (raining()) tips.push('下雨了，自製彈藥容易啞火，手槍不受影響。躲到營火旁能烘乾火藥。');
+  if (P.count('wetPowder') >= 2) tips.push('背包裡有受潮火藥，到營火旁就能烘乾。');
   return tips.join('\n');
 }
 function craftable() {
@@ -188,7 +221,7 @@ export function dialogFor(a) {
   if (a.id === 'attendant') return attendantDialog(a);
   switch (a.id) {
     case 'mizhu':
-      return { text: '在下糜竺，世代經商。足下也是生意人？妙極！\n你那「震天雷」若肯割愛，在下願出高價收購。', opts: [{ t: '看看貨物。', fn: () => 'shop' }, BYE] };
+      return { text: '在下糜竺，世代經商。足下也是生意人？妙極！\n你那「震天雷」若肯割愛，在下願出高價收購。' + (OD.repTier('mizhu').disc < 1 ? `\n（老主顧，貨價 ${OD.repTier('mizhu').disc * 10} 折）` : ''), opts: [{ t: '看看貨物。', fn: () => 'shop' }, ...orderOpt(a), BYE] };
     case 'liubei':
       if (s === 0) return {
         text: '這位壯士衣著奇特，莫非是異域之人？\n方才遠處傳來雷霆之聲，可是出自你手中之物？', opts: [{

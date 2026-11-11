@@ -8,6 +8,8 @@ export const ITEMS = {
   sulfur: { n: '硫磺', i: '🟡' },
   charcoal: { n: '木炭', i: '⚫' },
   powder: { n: '黑火藥', i: '💥' },
+  wetPowder: { n: '受潮火藥', i: '🌫️' },
+  oilcloth: { n: '油布包', i: '👝', key: true },
   berry: { n: '野果', i: '🍒', food: 12, water: 6 },
   meat: { n: '生肉', i: '🥩', food: 14, hp: -6 },
   cooked: { n: '烤肉', i: '🍖', food: 42 },
@@ -41,6 +43,8 @@ export const RECIPES = [
   { id: 'rifle', n: '步槍', d: '附瞄準鏡，一槍斃命', need: { iron: 12, wood: 6, powder: 5 }, weapon: 'rifle', bonus: { rifleAmmo: 10 } },
   { id: 'rifleAmmo', n: '步槍彈 ×10', d: '步槍彈藥', need: { powder: 2, iron: 2 }, give: { rifleAmmo: 10 } },
   { id: 'arrow', n: '箭矢 ×6', d: '長弓使用', need: { wood: 1, iron: 1 }, give: { arrow: 6 } },
+  { id: 'drypowder', n: '烘乾火藥', d: '須在營火旁', near: 'fire', need: { wetPowder: 2, wood: 1 }, give: { powder: 2 } },
+  { id: 'oilcloth', n: '油布包', d: '獸油浸布，大幅減緩火藥受潮', once: 'oilcloth', need: { meat: 3, herb: 2 }, give: { oilcloth: 1 } },
   { id: 'cooked', n: '烤肉', d: '熟食更能充飢', need: { meat: 1, wood: 1 }, give: { cooked: 1 } },
   { id: 'medicine', n: '金瘡藥', d: '按 H 使用，恢復生命', need: { herb: 2 }, give: { medicine: 1 } },
 ];
@@ -50,6 +54,7 @@ export const SHOP_BUY = [
   { item: 'medicine', n: 1, price: 40 },
   { item: 'arrow', n: 10, price: 20 },
   { item: 'iron', n: 1, price: 22 },
+  { item: 'oilcloth', n: 1, price: 120, once: true },
   { item: 'saltpeter', n: 1, price: 28 },
   { item: 'sulfur', n: 1, price: 28 },
   { weapon: 'dao', price: 60 },
@@ -95,6 +100,10 @@ export const ACTORS = {
   sq_archer: { name: '曹軍弓弩手', short: '弓弩手', faction: 'ally', squad: true, hp: 115, speed: 5.0, dmg: 17, ranged: true, cd: 1.9, weapon: 'bow', look: { cloth: 0x2a3f7a, pants: 0x25252a, hat: 'turban', hatColor: 0x1a2a5a } },
   sq_cav: { name: '曹軍騎兵', short: '騎兵', faction: 'ally', squad: true, hp: 250, speed: 9.5, dmg: 23, reach: 3.3, cd: 1.4, weapon: 'spear', mounted: true, horseColor: 0x3a2a1c, look: { cloth: 0x2a3f7a, armor: 0x25305a, pants: 0x25252a, hat: 'helmet', hatColor: 0x30354a, crest: 0x3050b0 } },
   sq_shield: { name: '孫軍刀盾兵', short: '刀盾兵', faction: 'ally', squad: true, hp: 320, speed: 4.8, dmg: 15, reach: 2.4, cd: 1.1, weapon: 'dao', weapon2: 'shield', look: { cloth: 0xa82a20, armor: 0x7a1a14, pants: 0x3a1a14, hat: 'helmet', hatColor: 0x5a1a14, crest: 0xc8201a } },
+  // ---- 精銳（聲望「摯友」才能招募） ----
+  sq_baier: { name: '白毦兵', short: '白毦兵', faction: 'ally', squad: true, hp: 270, speed: 5.8, dmg: 25, reach: 3.1, cd: 1.05, weapon: 'spear', look: { cloth: 0xe8e8e0, armor: 0x2f6b3a, pants: 0x30302a, hat: 'helmet', hatColor: 0xd8d8d0, crest: 0xffffff } },
+  sq_hubao: { name: '虎豹騎', short: '虎豹騎', faction: 'ally', squad: true, hp: 390, speed: 10.5, dmg: 31, reach: 3.4, cd: 1.2, weapon: 'spear', mounted: true, horseColor: 0x1a1612, look: { cloth: 0x1a1a22, armor: 0x101016, pants: 0x101010, hat: 'helmet', hatColor: 0x18181e, crest: 0xb08a20 } },
+  sq_danyang: { name: '丹陽兵', short: '丹陽兵', faction: 'ally', squad: true, hp: 440, speed: 5.2, dmg: 22, reach: 2.5, cd: 0.95, weapon: 'dao', weapon2: 'shield', look: { cloth: 0x8a1a14, armor: 0x3a3a40, pants: 0x2a1a14, hat: 'helmet', hatColor: 0x3a3a40, crest: 0xe0c040 } },
   // ---- 名將（友方） ----
   liubei: { name: '劉備', title: '字玄德・漢室宗親', general: true, faction: 'ally', hp: 1400, speed: 5.6, dmg: 40, reach: 2.6, cd: 0.9, weapon: 'sword', weapon2: 'sword', scale: 1.08, look: { cloth: 0x2f7a45, armor: 0xb8963a, pants: 0x2a2a2a, hat: 'crown', hatColor: 0xd4af37, beard: 'short', cape: 0x1f5a30 } },
   guanyu: { name: '關羽', title: '字雲長・美髯公', general: true, faction: 'ally', hp: 2200, speed: 5.8, dmg: 62, reach: 3.6, cd: 1.1, weapon: 'guandao', scale: 1.2, look: { skin: 0xb5483a, cloth: 0x1f6b35, armor: 0x1a5a2c, pants: 0x1a3a22, hat: 'cap', hatColor: 0x1a5a2c, beard: 'long', cape: 0x145025 } },
@@ -116,14 +125,14 @@ export const RECRUITS = {
   liubei: { stage: 1, units: [
     { id: 'sq_spear', coin: 40, res: { ration: 2, iron: 2 } },
     { id: 'sq_blade', coin: 35, res: { ration: 2, wood: 3 } },
-  ], attendant: 'wood' },
+  ], attendant: 'wood', elite: { id: 'sq_baier', coin: 110, res: { ration: 3, iron: 4, powder: 2 } } },
   caocao: { stage: 2, units: [
     { id: 'sq_archer', coin: 60, res: { ration: 2, arrow: 10 } },
     { id: 'sq_cav', coin: 130, res: { ration: 3, iron: 5, meat: 2 } },
-  ], attendant: 'ore' },
+  ], attendant: 'ore', elite: { id: 'sq_hubao', coin: 220, res: { ration: 4, iron: 8, meat: 3 } } },
   sunjian: { stage: 2, units: [
     { id: 'sq_shield', coin: 70, res: { ration: 2, iron: 3, wood: 3 } },
-  ], attendant: 'herb' },
+  ], attendant: 'herb', elite: { id: 'sq_danyang', coin: 130, res: { ration: 3, iron: 5, wood: 4 } } },
 };
 // 隊伍名額：兵卒佔 1、名將佔 2；隨主線推進增加
 export const SQUAD_CAP = [0, 3, 4, 5, 6, 8];

@@ -204,11 +204,8 @@ function buildSky(scene) {
   sky = new THREE.Mesh(new THREE.SphereGeometry(1000, 24, 12), skyMat); sky.frustumCulled = false; scene.add(sky);
   hemi = new THREE.HemisphereLight(0xcfe4ff, 0x4a4030, 1); scene.add(hemi);
   sun = new THREE.DirectionalLight(0xfff0d8, 2); scene.add(sun); scene.add(sun.target);
-  if (!G.touch) {
-    sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
-    const sc = sun.shadow.camera; sc.left = -55; sc.right = 55; sc.top = 55; sc.bottom = -55; sc.near = 10; sc.far = 320;
-    sun.shadow.bias = -0.0015; sun.shadow.normalBias = 0.05;
-  }
+  { const sc = sun.shadow.camera; sc.left = -55; sc.right = 55; sc.top = 55; sc.bottom = -55; sc.near = 10; sc.far = 320; }
+  sun.shadow.bias = -0.0015; sun.shadow.normalBias = 0.05;
   const disc = (color, size) => { const m = new THREE.Mesh(new THREE.CircleGeometry(size, 20), new THREE.MeshBasicMaterial({ color, fog: false, depthWrite: false })); scene.add(m); return m; };
   sunDisc = disc(0xfff2c0, 38); moonDisc = disc(0xe4ecff, 26);
   const sp = new Float32Array(900 * 3), r = mulberry32(99);
@@ -224,6 +221,16 @@ function buildSky(scene) {
 const C = (h) => new THREE.Color(h);
 const cTopD = C(0x3878d0), cTopN = C(0x04060e), cBotD = C(0xc4dcf0), cBotN = C(0x0c1424), cDusk = C(0xf08a48), cTmp = C(0);
 const sunDir = new THREE.Vector3();
+// 畫質設定：開關太陽陰影（size = 0 代表關閉）
+export function setShadows(size) {
+  const on = size > 0;
+  if (sun.castShadow === on && (!on || sun.shadow.mapSize.x === size)) return;
+  sun.castShadow = on;
+  if (on) { sun.shadow.mapSize.set(size, size); if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; } }
+  G.renderer.shadowMap.enabled = on;
+  G.scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m.needsUpdate = true); });
+}
+const cRain = new THREE.Color(0x7a8490), cRainN = new THREE.Color(0x10141a);
 export function updateSky(dt, camPos) {
   const a = (G.time / 1440 - 0.25) * PI * 2, sh = Math.sin(a);
   sunDir.set(Math.cos(a), sh, 0.4).normalize();
@@ -231,16 +238,20 @@ export function updateSky(dt, camPos) {
   world.dayF = dayF; world.isNight = G.time < 300 || G.time > 1170;
   skyMat.uniforms.top.value.copy(cTopN).lerp(cTopD, dayF);
   const bot = skyMat.uniforms.bot.value.copy(cBotN).lerp(cBotD, dayF).lerp(cDusk, dusk * smoothstep(-0.3, 0, sh));
+  // 天氣：陰雨讓天空變灰、霧氣變濃
+  const wet = G.weatherF || 0, fogW = G.fogF || 0;
+  if (wet > 0) { const c = cTmp.copy(cRainN).lerp(cRain, dayF); bot.lerp(c, wet * 0.8); skyMat.uniforms.top.value.lerp(c, wet * 0.75); }
   G.scene.fog.color.copy(bot);
-  G.scene.fog.near = lerp(45, 90, dayF); G.scene.fog.far = lerp(300, 560, dayF) * (G.touch ? 0.8 : 1);
+  const fs = G.fogScale || 1, thick = 1 - Math.max(wet * 0.45, fogW * 0.78);
+  G.scene.fog.near = lerp(45, 90, dayF) * thick; G.scene.fog.far = lerp(300, 560, dayF) * fs * thick;
   sky.position.copy(camPos); stars.position.copy(camPos);
-  stars.material.opacity = 1 - dayF;
-  hemi.intensity = lerp(0.42, 1.15, dayF);
+  stars.material.opacity = (1 - dayF) * (1 - wet) * (1 - fogW);
+  hemi.intensity = lerp(0.42, 1.15, dayF) * (1 - wet * 0.3);
   hemi.color.copy(cTmp.set(0x6078b0)).lerp(cBotD, dayF);
-  if (sh > -0.08) { sun.color.set(0xfff0d8).lerp(cDusk, dusk); sun.intensity = 2.4 * smoothstep(-0.08, 0.2, sh); sun.position.copy(camPos).addScaledVector(sunDir, 160); }
+  if (sh > -0.08) { sun.color.set(0xfff0d8).lerp(cDusk, dusk); sun.intensity = 2.4 * smoothstep(-0.08, 0.2, sh) * (1 - wet * 0.65); sun.position.copy(camPos).addScaledVector(sunDir, 160); }
   else { sun.color.set(0x8aa4e0); sun.intensity = 0.5; sun.position.copy(camPos).addScaledVector(sunDir, -160); }
   sun.target.position.copy(camPos);
-  sunDisc.position.copy(camPos).addScaledVector(sunDir, 900); sunDisc.lookAt(camPos);
+  sunDisc.position.copy(camPos).addScaledVector(sunDir, 900); sunDisc.lookAt(camPos); sunDisc.visible = moonDisc.visible = wet < 0.5 && fogW < 0.6;
   moonDisc.position.copy(camPos).addScaledVector(sunDir, -900); moonDisc.lookAt(camPos);
   const t = G.now;
   for (const f of world.fires) { if (f.light) f.light.intensity = f.base * (0.85 + 0.25 * Math.sin(t * 11 + f.ph) * Math.sin(t * 7.3)); f.flame.scale.y = 1 + 0.25 * Math.sin(t * 13 + f.ph); }

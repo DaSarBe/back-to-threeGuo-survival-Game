@@ -1,8 +1,9 @@
 // 以 WebAudio 即時合成所有音效與配樂（無外部音檔）
-let ctx = null, master = null, musicGain = null, noiseBuf = null;
+let ctx = null, master = null, musicGain = null, sfxGain = null, noiseBuf = null, rainSrc = null, rainGain = null;
+let vol = { sfx: 0.8, music: 0.6 };
 let musicOn = true, musicTimer = null, noteIdx = 4;
 
-function tone(type, f0, f1, dur, vol, delay = 0, dest = master) {
+function tone(type, f0, f1, dur, vol, delay = 0, dest = sfxGain) {
   const t = ctx.currentTime + delay;
   const o = ctx.createOscillator(), g = ctx.createGain();
   o.type = type; o.frequency.setValueAtTime(f0, t);
@@ -17,7 +18,7 @@ function noise(dur, vol, ftype, f0, f1, delay = 0) {
   f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
   const g = ctx.createGain();
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
-  s.connect(f); f.connect(g); g.connect(master);
+  s.connect(f); f.connect(g); g.connect(sfxGain);
   s.start(t, Math.random() * 0.5, dur + 0.05);
 }
 
@@ -69,7 +70,8 @@ export const audio = {
     if (!AC) return;
     ctx = new AC();
     master = ctx.createGain(); master.gain.value = 0.5; master.connect(ctx.destination);
-    musicGain = ctx.createGain(); musicGain.gain.value = 0.55; musicGain.connect(master);
+    musicGain = ctx.createGain(); musicGain.gain.value = vol.music; musicGain.connect(master);
+    sfxGain = ctx.createGain(); sfxGain.gain.value = vol.sfx; sfxGain.connect(master);
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -81,5 +83,21 @@ export const audio = {
   },
   // 依距離衰減
   playAt(name, dist, vol = 1) { this.play(name, vol * Math.max(0, 1 - dist / 70)); },
-  toggleMusic() { musicOn = !musicOn; return musicOn; },
+  toggleMusic() { musicOn = !musicOn; if (musicGain) musicGain.gain.value = musicOn ? vol.music : 0; return musicOn; },
+  setVolumes(sfx, music) {
+    vol = { sfx, music };
+    if (sfxGain) sfxGain.gain.value = sfx;
+    if (musicGain) musicGain.gain.value = musicOn ? music : 0;
+  },
+  // 雨聲：持續的濾波雜訊，強度 0..1
+  rain(level) {
+    if (!ctx) return;
+    if (!rainSrc) {
+      rainSrc = ctx.createBufferSource(); rainSrc.buffer = noiseBuf; rainSrc.loop = true;
+      const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1400; f.Q.value = 0.4;
+      rainGain = ctx.createGain(); rainGain.gain.value = 0;
+      rainSrc.connect(f); f.connect(rainGain); rainGain.connect(sfxGain); rainSrc.start();
+    }
+    rainGain.gain.setTargetAtTime(level * 0.35, ctx.currentTime, 0.5);
+  },
 };

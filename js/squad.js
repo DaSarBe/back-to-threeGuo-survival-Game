@@ -4,6 +4,10 @@ import { ACTORS, ITEMS, RECRUITS, SQUAD_CAP, ATTENDANT_MAX, ATTENDANT_COST, ATTE
 import { Actor, Attendant } from './entities.js';
 import { audio } from './audio.js';
 import { rnd } from './util.js';
+import { price, repTier } from './orders.js';
+
+// 名將招攬費依哪位主公的聲望打折
+export const LORD_OF = { guanyu: 'liubei', zhangfei: 'liubei', zhaoyun: 'liubei', liubei: 'liubei', caocao: 'caocao', sunjian: 'sunjian' };
 
 export const UNIT_DESC = {
   sq_spear: '長槍及遠，攻守均衡',
@@ -11,6 +15,9 @@ export const UNIT_DESC = {
   sq_archer: '在後方放箭支援',
   sq_cav: '騎馬衝陣，血厚攻高',
   sq_shield: '持盾，極為耐打',
+  sq_baier: '劉備親衛精銳，攻守俱佳',
+  sq_hubao: '曹軍最精銳的重騎兵',
+  sq_danyang: '江東精兵，持盾極為耐打',
 };
 
 export const squadCap = () => SQUAD_CAP[Math.min(G.stage, SQUAD_CAP.length - 1)];
@@ -22,7 +29,7 @@ export const isHired = id => !GENERAL_COST[id] || !!(G.flags.hired && G.flags.hi
 export function hireGeneral(a, useRes) {
   const c = GENERAL_COST[a.id];
   if (!isUnlocked(a.id)) return unlockHint(a.id);
-  if (!pay(useRes ? c.res : { coin: c.coin })) return '錢或資源不夠。';
+  if (!pay(useRes ? c.res : { coin: price(LORD_OF[a.id], c.coin) })) return '錢或資源不夠。';
   (G.flags.hired || (G.flags.hired = {}))[a.id] = true;
   audio.play('quest'); G.ui.msg(`🤝 ${a.name} 已被招攬！之後隨時可以邀他同行。`, 'quest'); G.save();
   return null;
@@ -41,7 +48,8 @@ export function spawnRecruit(id, x, z, hpRatio = 1) {
 }
 export function recruit(lord, u, useRes) {
   if (squadUsed() + 1 > squadCap()) return '隊伍已滿。推進主線可以帶更多人。';
-  if (!pay(useRes ? u.res : { coin: u.coin })) return '錢或資源不夠。';
+  if (u.elite && !repTier(lord.id).elite) return '與這位主公的聲望不足（需「摯友」）。';
+  if (!pay(useRes ? u.res : { coin: price(lord.id, u.coin) })) return '錢或資源不夠。';
   spawnRecruit(u.id, lord.pos.x, lord.pos.z);
   audio.play('horn', 0.4); G.ui.dirty = true;
   return null;
@@ -57,10 +65,10 @@ export function giveAttendant(spec, x, z, o = {}) {
   return new Attendant(spec, x ?? P.pos.x + 2, z ?? P.pos.z + 2, o);
 }
 export const ownsAttendant = spec => G.attendants.some(a => a.spec === spec);
-export function buyAttendant(spec, useRes) {
+export function buyAttendant(spec, useRes, lordId) {
   if (G.attendants.length >= ATTENDANT_MAX) return `侍從最多 ${ATTENDANT_MAX} 位。`;
   if (ownsAttendant(spec)) return '你已經有這位侍從了。';
-  if (!pay(useRes ? ATTENDANT_COST.res : { coin: ATTENDANT_COST.coin })) return '錢或資源不夠。';
+  if (!pay(useRes ? ATTENDANT_COST.res : { coin: price(lordId, ATTENDANT_COST.coin) })) return '錢或資源不夠。';
   giveAttendant(spec); audio.play('coin');
   G.ui.msg(`${ATTENDANTS[spec].role} ${ATTENDANTS[spec].name} 加入了！`, 'get');
   return null;

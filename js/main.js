@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { G } from './state.js';
-import { world, buildWorld, updateSky, updateNodes, heightAt, inSite, SITES } from './world.js';
+import { world, buildWorld, updateSky, updateNodes, heightAt, inSite, SITES, setShadows } from './world.js';
+import { S, quality } from './settings.js';
+import { updateWeather, rebuildRain, clearWeather } from './weather.js';
+import { OR, loadOrders, checkOrders } from './orders.js';
 import { player, updatePlayer, initInput, resetInput } from './player.js';
 import { Actor, Animal, updateProjectiles, updatePickups, updateEffects, initFx } from './entities.js';
 import { ui } from './ui.js';
@@ -20,12 +23,12 @@ function init() {
   G.touch = 'ontouchstart' in window && matchMedia('(pointer: coarse)').matches;
   if (G.touch) document.body.classList.add('touch');
   const renderer = G.renderer = new THREE.WebGLRenderer({ canvas, antialias: !G.touch, powerPreference: 'high-performance' });
-  basePR = Math.min(devicePixelRatio || 1, G.touch ? 1.5 : 2); renderer.setPixelRatio(basePR);
-  renderer.shadowMap.enabled = !G.touch; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const scene = G.scene = new THREE.Scene();
   const camera = G.camera = new THREE.PerspectiveCamera(74, 1, 0.08, 2400); camera.rotation.order = 'YXZ'; scene.add(camera);
   G.world = world; G.player = player; G.ui = ui;
   buildWorld(scene); initFx(scene); ui.init(); initInput(canvas);
+  G.applySettings('all');
   const resize = () => {
     const w = innerWidth, h = innerHeight, asp = w / h;
     renderer.setSize(w, h, false); camera.aspect = asp;
@@ -70,7 +73,8 @@ function start(save) {
     G.stage = save.stage; G.killed = save.killed || {}; G.day = save.day; G.time = save.time; G.flags = save.flags || {};
     const p = save.p;
     P.pos.set(p.x, heightAt(p.x, p.z), p.z); P.yaw = p.yaw;
-    Object.assign(P, { hp: p.hp, hunger: p.hunger, thirst: p.thirst, inv: p.inv, owned: p.owned, mags: p.mags, armor: p.armor, canteen: p.canteen, cur: p.cur });
+    Object.assign(P, { hp: p.hp, hunger: p.hunger, thirst: p.thirst, inv: p.inv, owned: p.owned, mags: p.mags, armor: p.armor, canteen: p.canteen, cur: p.cur, damp: p.damp || 0 });
+    loadOrders(save.orders);
   }
   populate();
   if (save && save.p.horse) { const h = spawnHorse(P.pos.x + 3, P.pos.z + 2, save.p.horse === 'red'); h.tame(); P.horse = h; }
@@ -167,6 +171,7 @@ G.sleep = () => {
   ui.fade(true);
   setTimeout(() => {
     if (G.time >= 1080) G.day++; G.time = 360;
+    clearWeather(); player.damp = 0;
     player.hp = Math.min(player.maxHp, player.hp + 60); player.hunger = Math.max(15, player.hunger - 18); player.thirst = Math.max(15, player.thirst - 18);
     onDawn(); ui.fade(false); ui.msg(`一夜無事。第 ${G.day} 日清晨，進度已儲存。`, 'get'); G.save();
   }, 800);
@@ -193,11 +198,11 @@ G.onRespawn = () => {
 };
 G.save = () => {
   const P = player; if (!started || !P.alive) return;
-  const d = { v: 1, stage: G.stage, killed: G.killed, day: G.day, time: G.time, flags: G.flags, p: { x: P.pos.x, z: P.pos.z, yaw: P.yaw, hp: P.hp, hunger: P.hunger, thirst: P.thirst, inv: P.inv, owned: P.owned, mags: P.mags, armor: P.armor, canteen: P.canteen, cur: P.cur, horse: P.horse ? (P.horse.name === '赤兔馬' ? 'red' : 'yes') : null },
+  const d = { v: 1, stage: G.stage, killed: G.killed, day: G.day, time: G.time, flags: G.flags, p: { x: P.pos.x, z: P.pos.z, yaw: P.yaw, hp: P.hp, hunger: P.hunger, thirst: P.thirst, inv: P.inv, owned: P.owned, mags: P.mags, armor: P.armor, canteen: P.canteen, cur: P.cur, damp: Math.round(P.damp), horse: P.horse ? (P.horse.name === '赤兔馬' ? 'red' : 'yes') : null },
     squad: followers().filter(a => a.recruited).map(a => [a.id, +(a.hp / a.maxHp).toFixed(2)]),
     gens: followers().filter(a => a.def.general).map(a => a.id),
     att: G.attendants.map(a => ({ spec: a.spec, inv: a.inv, focus: a.focus, wait: a.wait, waitPos: a.waitPos })),
-    cmd: G.squadCmd };
+    cmd: G.squadCmd, orders: OR };
   try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { }
 };
 
@@ -249,7 +254,7 @@ function director(dt) {
   if (timers.deer <= 0) { timers.deer = 30; if (G.animals.filter(a => a.alive && a.kind === 'deer').length < 12) spawnDeer(true); }
   timers.sec -= dt;
   if (timers.sec <= 0) {
-    timers.sec = 1; checkQuest();
+    timers.sec = 1; checkQuest(); checkOrders();
     for (const a of G.actors) if (a.roam && a.alive && !a.target && dist2(a.pos.x, a.pos.z, P.pos.x, P.pos.z) > 280) { G.scene.remove(a.m.root); a.gone = true; a.alive = false; }
     G.actors = G.actors.filter(a => !a.gone); G.animals = G.animals.filter(a => !a.gone);
   }
@@ -326,6 +331,19 @@ function endCutscene() {
 }
 G.skipCutscene = () => endCutscene();
 
+// ------------------------------------------------------------------ 套用設定
+G.applySettings = (key = 'all') => {
+  const all = key === 'all';
+  if (all || key === 'sfx' || key === 'music') audio.setVolumes(S.sfx, S.music);
+  if (all || key === 'btn') document.body.style.setProperty('--bs', S.btn);
+  if (all || key === 'quality') {
+    const q = quality();
+    basePR = Math.min(devicePixelRatio || 1, q.pr); resScale = 1; resHold = 0;
+    G.renderer.setPixelRatio(basePR); G.renderer.setSize(innerWidth, innerHeight, false);
+    setShadows(q.shadows); G.fogScale = q.fog; rebuildRain();
+  }
+};
+
 // ------------------------------------------------------------------ 主迴圈
 function frame(t) {
   requestAnimationFrame(frame);
@@ -338,6 +356,7 @@ function frame(t) {
   } else if (!G.menu) {
     G.now += dt;
     director(dt);
+    updateWeather(dt);
     updatePlayer(dt);
     for (const a of G.actors) a.update(dt);
     for (const a of G.animals) a.update(dt);

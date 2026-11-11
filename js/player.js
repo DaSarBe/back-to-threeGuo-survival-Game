@@ -6,6 +6,7 @@ import { viewModel } from './models.js';
 import { audio } from './audio.js';
 import { spawnArrow, spawnGrenade, alertEnemies, fxTracer, fxBurst } from './entities.js';
 import { clamp, lerp, rnd, turnTo, dist2 } from './util.js';
+import { misfireChance, dudChance } from './weather.js';
 
 const PI = Math.PI;
 const keys = {}, mouse = { l: false, r: false };
@@ -16,7 +17,7 @@ const vms = {};
 
 export const player = {
   pos: new THREE.Vector3(), vy: 0, yaw: 0, pitch: 0, onGround: true, alive: true, radius: 0.4, eyeH: 1.68,
-  hp: 100, maxHp: 100, hunger: 100, thirst: 100, stamina: 100, armor: 0, canteen: 3,
+  hp: 100, maxHp: 100, hunger: 100, thirst: 100, stamina: 100, armor: 0, canteen: 3, damp: 0,
   inv: {}, owned: { pistol: true }, cur: 'pistol', mags: { pistol: 12, shotgun: 6, rifle: 5 },
   fireCd: 0, reloadT: 0, swingT: 0, meleeT: 0, recoil: 0, shake: 0, aim: 0, mount: null, horse: null,
   kx: 0, kz: 0, sprinting: false, stepT: 0, bob: 0, hurtT: 0, speedNow: 0, hx: 0, hz: 0, throwCd: 0,
@@ -90,7 +91,7 @@ export const player = {
     if (this.throwCd > 0) return;
     if (!this.take('grenade')) return G.ui.msg('沒有震天雷（2 黑火藥 + 1 鐵礦）。', 'warn');
     this.throwCd = 0.8; camDir(D); O.copy(G.camera.position).addScaledVector(D, 0.6);
-    V.copy(D).multiplyScalar(19); V.y += 5.5; spawnGrenade(O, V); audio.play('swing');
+    V.copy(D).multiplyScalar(19); V.y += 5.5; spawnGrenade(O, V, Math.random() < dudChance()); audio.play('swing');
   },
 
   // ---- 騎馬 ----
@@ -119,6 +120,12 @@ export const player = {
     if (w.type === 'gun') {
       if (this.mags[this.cur] <= 0) { audio.play('click'); this.fireCd = 0.25; this.reload(); return; }
       this.mags[this.cur]--; this.fireCd = w.rate; G.ui.dirty = true;
+      // 自製黑火藥彈藥受潮會啞火（手槍是現代子彈，不受影響）
+      if (w.ammo && Math.random() < misfireChance()) {
+        audio.play('click'); this.fireCd = w.rate * 1.5;
+        if (G.now - (this.misT || -9) > 4) { this.misT = G.now; G.ui.msg(`💨 啞火！火藥受潮了（受潮 ${Math.round(this.damp)}%）。換手槍或到營火旁烘乾。`, 'warn'); }
+        return;
+      }
       audio.play(this.cur); this.recoil += w.kick; flashT = 0.05;
       camDir(D); O.copy(G.camera.position);
       const spread = w.spread * (this.aim > 0.5 ? 0.35 : 1) * (this.mount && this.mount.speed > 5 ? 2 : 1) + (this.speedNow > 6 ? 0.012 : 0);
@@ -339,7 +346,7 @@ export function initInput(canvas) {
   const look = (dx, dy, s) => { P.yaw -= dx * s; P.pitch = clamp(P.pitch - dy * s, -1.5, 1.5); };
   document.addEventListener('mousemove', e => {
     if (G.menu) return;
-    const sens = 0.0022 * lerp(1, (WEAPONS[P.cur].fov || 74) / 74, P.aim);
+    const sens = 0.0022 * (G.settings.sens || 1) * lerp(1, (WEAPONS[P.cur].fov || 74) / 74, P.aim);
     if (document.pointerLockElement === canvas) look(e.movementX, e.movementY, sens);
     else if (G.noLock && (e.buttons & 2)) look(e.movementX, e.movementY, sens * 1.5);
   });
@@ -399,11 +406,11 @@ export function initInput(canvas) {
         if (d > m) { dx *= m / d; dy *= m / d; }
         touch.mx = dx / m; touch.mz = -dy / m; knob.style.transform = `translate(${dx}px,${dy}px)`;
       } else if (t.identifier === touch.lookId) {
-        look(t.clientX - touch.lx, t.clientY - touch.ly, 0.0055 * lerp(1, 0.4, P.aim));
+        look(t.clientX - touch.lx, t.clientY - touch.ly, 0.0055 * (G.settings.touchSens || 1) * lerp(1, 0.4, P.aim));
         touch.lx = t.clientX; touch.ly = t.clientY;
       } else if (touch.fingers.has(t.identifier)) { // 每根按開火的手指（左右兩顆）各自記錄位置，按住也能拖曳瞄準
         const f = touch.fingers.get(t.identifier);
-        look(t.clientX - f.x, t.clientY - f.y, 0.0055 * lerp(1, 0.4, P.aim));
+        look(t.clientX - f.x, t.clientY - f.y, 0.0055 * (G.settings.touchSens || 1) * lerp(1, 0.4, P.aim));
         f.x = t.clientX; f.y = t.clientY;
       }
     }

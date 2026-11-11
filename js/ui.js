@@ -7,22 +7,27 @@ import { QUESTS, dialogFor } from './quests.js';
 import { resetInput } from './player.js';
 import { SQUAD_CMDS } from './data.js';
 import { followers, squadUsed, squadCap } from './squad.js';
+import * as OD from './orders.js';
+import { nearFire, weatherIcon, raining } from './weather.js';
+import { S, DEFAULTS, QUALITY, saveSettings } from './settings.js';
 
 const $ = id => document.getElementById(id);
 const el = {};
 let hitT = 0, mapT = 0, last = {}, bossRef = null;
-const MENUS = ['start', 'pause', 'inv', 'dialog', 'shop', 'dead', 'win'];
+const MENUS = ['start', 'pause', 'inv', 'dialog', 'shop', 'dead', 'win', 'settings'];
 
 export const ui = {
   dirty: true,
   init() {
     for (const id of ['hud', 'vignette', 'scope', 'hit', 'clock', 'quest-t', 'quest-d', 'quest-dist', 'minimap', 'followers', 'boss', 'boss-name', 'boss-fill', 'msgs', 'prompt',
-      'b-hp', 'b-hunger', 'b-thirst', 'b-stamina', 'hotbar', 'ammo-n', 'ammo-w', 'quick', 'compass-in', 'fade', 'touch']) el[id] = $(id);
+      'b-hp', 'b-hunger', 'b-thirst', 'b-stamina', 'b-damp', 'st-damp', 'quest-orders', 'hotbar', 'ammo-n', 'ammo-w', 'quick', 'compass-in', 'fade', 'touch']) el[id] = $(id);
     document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => ui.close());
     document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => ui.tab(b.dataset.tab));
     $('btn-respawn').onclick = () => { G.player.respawn(); ui.close(); };
     $('btn-music').onclick = () => ui.msg(audio.toggleMusic() ? '配樂：開' : '配樂：關', 'info');
     $('btn-save').onclick = () => { G.save(); ui.msg('已存檔。', 'info'); };
+    document.querySelectorAll('[data-settings]').forEach(b => b.onclick = () => ui.openSettings());
+    $('settings-back').onclick = () => ui.closeSettings();
     for (const [ch, a] of [['北', 0], ['東', -Math.PI / 2], ['南', Math.PI], ['西', Math.PI / 2]]) { // yaw：面向該方位時的鏡頭角
       const s = document.createElement('span'); s.textContent = ch; s.dataset.a = a; el['compass-in'].appendChild(s);
     }
@@ -41,19 +46,51 @@ export const ui = {
     for (const m of MENUS) $('menu-' + m).classList.add('hidden');
     G.menu = null; G.lockPointer && G.lockPointer(); document.body.classList.remove('menu-open');
   },
-  escape() { if (['pause', 'inv', 'shop', 'dialog', 'win'].includes(G.menu)) this.close(); },
+  escape() { if (G.menu === 'settings') this.closeSettings(); else if (['pause', 'inv', 'shop', 'dialog', 'win'].includes(G.menu)) this.close(); },
+  // ---------- 設定 ----------
+  openSettings() { this.settingsFrom = G.menu || 'pause'; this.open('settings'); this.renderSettings(); },
+  closeSettings() { this.open(this.settingsFrom === 'start' ? 'start' : 'pause'); },
+  renderSettings() {
+    const box = $('settings-body'); box.innerHTML = '';
+    const slider = (key, label, min, max, step, fmt) => {
+      const r = document.createElement('div'); r.className = 'set-row';
+      r.innerHTML = `<label>${label}</label><input type="range" min="${min}" max="${max}" step="${step}" value="${S[key]}"><span>${fmt(S[key])}</span>`;
+      const inp = r.querySelector('input'), out = r.querySelector('span');
+      inp.oninput = () => { S[key] = +inp.value; out.textContent = fmt(S[key]); saveSettings(); G.applySettings(key); };
+      box.appendChild(r);
+    };
+    const pct = v => Math.round(v * 100) + '%', mul = v => v.toFixed(2) + '×';
+    if (G.touch) slider('touchSens', '觸控靈敏度', 0.3, 2.5, 0.05, mul); else slider('sens', '滑鼠靈敏度', 0.3, 2.5, 0.05, mul);
+    const q = document.createElement('div'); q.className = 'set-row';
+    q.innerHTML = '<label>畫質</label><div class="seg"></div>';
+    for (const [k, n] of [['auto', '自動'], ...Object.entries(QUALITY).map(([k, v]) => [k, v.n])]) {
+      const b = document.createElement('button'); b.textContent = n; b.className = S.quality === k ? 'on' : '';
+      b.onclick = () => { S.quality = k; saveSettings(); G.applySettings('quality'); this.renderSettings(); };
+      q.querySelector('.seg').appendChild(b);
+    }
+    box.appendChild(q);
+    slider('sfx', '音效音量', 0, 1, 0.05, pct);
+    slider('music', '配樂音量', 0, 1, 0.05, pct);
+    if (G.touch) slider('btn', '按鍵大小', 0.8, 1.3, 0.05, pct);
+    const hint = document.createElement('p'); hint.className = 'dim';
+    hint.textContent = '畫質「自動」：電腦預設高、手機預設中。低畫質關閉陰影並縮短可視距離，最省電。';
+    box.appendChild(hint);
+    const rs = document.createElement('button'); rs.textContent = '恢復預設'; rs.onclick = () => { Object.assign(S, DEFAULTS); saveSettings(); G.applySettings('all'); this.renderSettings(); };
+    box.appendChild(rs);
+  },
   tab(t) {
     this.curTab = t;
     document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
-    for (const k of ['craft', 'bag', 'map']) $('tab-' + k).classList.toggle('hidden', k !== t);
-    if (t === 'craft') this.renderCraft(); else if (t === 'bag') this.renderBag(); else this.renderMap();
+    for (const k of ['craft', 'bag', 'orders', 'map']) $('tab-' + k).classList.toggle('hidden', k !== t);
+    if (t === 'craft') this.renderCraft(); else if (t === 'bag') this.renderBag(); else if (t === 'orders') this.renderOrders(); else this.renderMap();
   },
   renderCraft() {
     const P = G.player, box = $('tab-craft'); box.innerHTML = '';
     for (const r of RECIPES) {
-      const owned = r.weapon && P.owned[r.weapon];
+      const owned = (r.weapon && P.owned[r.weapon]) || (r.once && P.count(r.once) > 0);
       let ok = !owned;
-      const need = Object.entries(r.need).map(([it, n]) => { const have = P.count(it); if (have < n) ok = false; return `<span class="${have < n ? 'lack' : ''}">${ITEMS[it].i}${ITEMS[it].n} ${have}/${n}</span>`; }).join('　');
+      let need = Object.entries(r.need).map(([it, n]) => { const have = P.count(it); if (have < n) ok = false; return `<span class="${have < n ? 'lack' : ''}">${ITEMS[it].i}${ITEMS[it].n} ${have}/${n}</span>`; }).join('　');
+      if (r.near === 'fire') { const f = nearFire(P.pos, 8); if (!f) ok = false; need += `　<span class="${f ? '' : 'lack'}">🔥營火旁</span>`; }
       const row = document.createElement('div'); row.className = 'row';
       const desc = G.touch ? r.d.replace('按 G ', '點 💣 ').replace('按 H ', '點 💊 ') : r.d;
       row.innerHTML = `<div class="nm"><b>${r.n}</b><span>${desc}</span><div class="need">${need}</div></div>`;
@@ -66,6 +103,16 @@ export const ui = {
       };
       row.appendChild(b); box.appendChild(row);
     }
+  },
+  renderOrders() {
+    const box = $('tab-orders'), P = G.player, A = OD.OR.active;
+    let h = `<h3>進行中的訂單 ${A.length}/${OD.MAX_ACTIVE}</h3>`;
+    h += A.length ? A.map(o => { const have = P.count(o.item), late = o.due <= G.day; return `<div class="row"><div class="nm"><b>${OD.ISSUERS[o.from].n}</b><span class="${late ? 'lack' : ''}">第 ${o.due} 日前${o.due < G.day ? '（已逾期）' : late ? '（今天到期！）' : ''}</span><div class="need"><span class="${have < o.qty ? 'lack' : ''}">${ITEMS[o.item].i}${ITEMS[o.item].n} ${have}/${o.qty}</span>　🪙${o.reward}　聲望 +${o.rep}</div></div></div>`; }).join('')
+      : '<p class="dim">目前沒有訂單。找劉備、糜竺交談可以接單（擊敗張角後曹操、孫堅也會下單）。</p>';
+    h += '<h3>聲望</h3><div class="grid">';
+    for (const id in OD.ISSUERS) { const t = OD.repTier(id); h += `<div class="cell">${OD.ISSUERS[id].n}<b>${t.n}</b><br><span class="dim">${OD.OR.rep[id]} 點${t.disc < 1 ? `・${t.disc * 10} 折` : ''}${t.elite && id !== 'mizhu' ? '・可招精銳' : ''}</span></div>`; }
+    h += '</div><p class="dim">準時交貨提升聲望：15 點「信賴」9 折、35 點「摯友」8 折並可招募精銳兵種。逾期扣 6 點。</p>';
+    box.innerHTML = h;
   },
   renderBag() {
     const P = G.player, box = $('tab-bag');
@@ -111,12 +158,13 @@ export const ui = {
       const b = document.createElement('button'); b.textContent = label; b.disabled = !ok; b.onclick = () => { fn(); audio.play('coin'); this.renderShop(); }; r.appendChild(b); return r;
     };
     for (const s of SHOP_BUY) {
-      let name, owned = false;
+      let name, owned = false; const price = OD.price('mizhu', s.price);
+      if (s.once) owned = P.count(s.item) > 0;
       if (s.item) name = `${ITEMS[s.item].i} ${ITEMS[s.item].n}${s.n > 1 ? ' ×' + s.n : ''}`;
       else if (s.weapon) { name = `${WEAPONS[s.weapon].i} ${WEAPONS[s.weapon].n}`; owned = P.owned[s.weapon]; }
       else { name = '🛡️ ' + s.n; owned = P.armor >= s.armor; }
-      buy.appendChild(row(`<b>${name}</b>`, owned ? '已擁有' : `🪙${s.price}`, !owned && P.count('coin') >= s.price, () => {
-        P.take('coin', s.price);
+      buy.appendChild(row(`<b>${name}</b>`, owned ? '已擁有' : `🪙${price}`, !owned && P.count('coin') >= price, () => {
+        P.take('coin', price);
         if (s.item) P.give(s.item, s.n); else if (s.weapon) P.giveWeapon(s.weapon); else { P.armor = s.armor; ui.msg(`穿上了${s.n}`, 'get'); }
       }));
     }
@@ -178,8 +226,13 @@ export const ui = {
     const P = G.player;
     const bar = (id, v) => { const w = Math.round(v); if (last[id] !== w) { last[id] = w; el[id].style.width = w + '%'; el[id].classList.toggle('low', w < 25); } };
     bar('b-hp', P.hp / P.maxHp * 100); bar('b-hunger', P.hunger); bar('b-thirst', P.thirst); bar('b-stamina', P.stamina);
+    const showDamp = P.damp > 0.5 || raining();
+    if (last.showDamp !== showDamp) { last.showDamp = showDamp; el['st-damp'].classList.toggle('hidden', !showDamp); }
+    if (showDamp) { const w = Math.round(P.damp); if (last.damp !== w) { last.damp = w; el['b-damp'].style.width = w + '%'; el['b-damp'].classList.toggle('low', w > 60); } }
+    const oa = OD.OR.active, ok = oa.length ? `📜 訂單 ${oa.length} 張・最近第 ${Math.min(...oa.map(o => o.due))} 日` : '';
+    if (last.ok !== ok) { last.ok = ok; el['quest-orders'].textContent = ok; }
     if (hitT > 0) { hitT -= dt; if (hitT <= 0) el.hit.style.opacity = 0; }
-    const hh = Math.floor(G.time / 60), mm = Math.floor(G.time % 60 / 10) * 10, ck = `第 ${G.day} 日　${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}　${hh >= 5 && hh < 19 ? '☀️' : '🌙'}`;
+    const hh = Math.floor(G.time / 60), mm = Math.floor(G.time % 60 / 10) * 10, ck = `第 ${G.day} 日　${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}　${G.weather.kind !== 'clear' ? weatherIcon() : hh >= 5 && hh < 19 ? '☀️' : '🌙'}`;
     if (last.ck !== ck) { last.ck = ck; el.clock.textContent = ck; }
 
     if (this.dirty || P.reloadT > 0 !== last.rl) {

@@ -104,7 +104,7 @@ export class Actor {
   findTarget() {
     const P = G.player; let best = null, bd = 1e9;
     if (this.faction === 'enemy') {
-      const see = this.alert > 0 ? 110 : (world.isNight ? 28 : 40) * (this.def.boss ? 1.3 : 1);
+      const see = this.alert > 0 ? 110 : (world.isNight ? 28 : 40) * (this.def.boss ? 1.3 : 1) * (1 - (G.fogF || 0) * 0.4 - (G.weatherF > 0.6 ? 0.15 : 0)); // 霧和雨會縮短敵人視野
       const ok = o => !this.arena || this.inArena(o); // 敵將只追擊決戰圈內的對手
       if (P.alive && ok(P)) { const d = d2(this.pos, P.pos); if (d < see) { best = P; bd = d * 0.8; } }
       for (const a of G.actors) if (a.alive && a.faction === 'ally' && !a.def.noncombat && ok(a)) { const d = d2(this.pos, a.pos); if (d < 32 && d < bd) { best = a; bd = d; } }
@@ -546,9 +546,9 @@ export function spawnArrow(pos, vel, owner, dmg) {
   const mesh = new THREE.Mesh(arrowGeo, arrowMat); mesh.position.copy(pos); G.scene.add(mesh);
   G.projectiles.push({ type: 'arrow', pos: pos.clone(), vel: vel.clone(), owner, dmg, life: 5, mesh });
 }
-export function spawnGrenade(pos, vel) {
+export function spawnGrenade(pos, vel, dud = false) {
   const mesh = new THREE.Mesh(grenGeo, grenMat); mesh.position.copy(pos); G.scene.add(mesh);
-  G.projectiles.push({ type: 'grenade', pos: pos.clone(), vel: vel.clone(), life: 2.3, mesh });
+  G.projectiles.push({ type: 'grenade', pos: pos.clone(), vel: vel.clone(), life: 2.3, mesh, dud });
 }
 function hitsBody(p, t, r, top) { return Math.hypot(p.x - t.pos.x, p.z - t.pos.z) < r && p.y > t.pos.y - 0.1 && p.y < t.pos.y + top; }
 export function updateProjectiles(dt) {
@@ -584,7 +584,11 @@ export function updateProjectiles(dt) {
       const bx = p.pos.x, bz = p.pos.z; world.resolve(p.pos, 0.15);
       if (bx !== p.pos.x || bz !== p.pos.z) { p.vel.x *= -0.3; p.vel.z *= -0.3; }
       p.mesh.position.copy(p.pos); p.mesh.rotation.x += dt * 9;
-      if (p.life <= 0) { p.gone = true; explode(p.pos, 8.5, 230, true); }
+      if (p.life <= 0) {
+        p.gone = true;
+        if (p.dud) { fxBurst(p.pos, 0x8a8a8a, 18, 2.5, 1.2, 0.3); audio.playAt('swing', d2(p.pos, G.player.pos), 0.6); G.ui.msg('💨 震天雷受潮，只冒了陣煙沒炸開……', 'warn'); }
+        else explode(p.pos, 8.5, 230, true);
+      }
     }
     if (p.gone) G.scene.remove(p.mesh);
   }
