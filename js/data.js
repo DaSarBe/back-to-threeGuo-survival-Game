@@ -137,6 +137,15 @@ export const ATTENDANTS = {
 };
 // 名將解鎖條件（擊敗哪位頭目後願意同行）
 export const UNLOCK = { guanyu: 'zhangjiao', zhangfei: 'zhangjiao', zhaoyun: 'huaxiong', caocao: 'huaxiong', sunjian: 'huaxiong', liubei: 'lvbu' };
+// 名將招攬費（劇情解鎖後付一次，之後可隨時同行）
+export const GENERAL_COST = {
+  guanyu: { coin: 300, res: { ration: 8, iron: 8, powder: 4 } },
+  zhangfei: { coin: 300, res: { ration: 8, iron: 8, powder: 4 } },
+  zhaoyun: { coin: 400, res: { ration: 10, iron: 10, powder: 6 } },
+  caocao: { coin: 450, res: { ration: 10, iron: 12, powder: 6 } },
+  sunjian: { coin: 450, res: { ration: 10, iron: 12, powder: 6 } },
+  liubei: { coin: 600, res: { ration: 12, iron: 15, powder: 8 } },
+};
 export const SQUAD_CMDS = [
   { id: 'follow', n: '跟隨', s: '跟' },
   { id: 'hold', n: '原地堅守', s: '守' },

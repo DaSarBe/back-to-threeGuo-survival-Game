@@ -1,6 +1,6 @@
 // 招兵買馬、隊伍名額、名將解鎖、侍從
 import { G } from './state.js';
-import { ACTORS, ITEMS, RECRUITS, SQUAD_CAP, ATTENDANT_MAX, ATTENDANT_COST, ATTENDANTS, UNLOCK, SQUAD_CMDS } from './data.js';
+import { ACTORS, ITEMS, RECRUITS, SQUAD_CAP, ATTENDANT_MAX, ATTENDANT_COST, ATTENDANTS, UNLOCK, SQUAD_CMDS, GENERAL_COST } from './data.js';
 import { Actor, Attendant } from './entities.js';
 import { audio } from './audio.js';
 import { rnd } from './util.js';
@@ -17,7 +17,16 @@ export const squadCap = () => SQUAD_CAP[Math.min(G.stage, SQUAD_CAP.length - 1)]
 export const followers = () => G.actors.filter(a => a.alive && a.follow);
 export const squadUsed = () => followers().reduce((n, a) => n + (a.def.general ? 2 : 1), 0);
 export const isUnlocked = id => !UNLOCK[id] || !!G.killed[UNLOCK[id]];
-export const unlockHint = id => `擊敗${ACTORS[UNLOCK[id]].name}之後，他才會願意與你同行。`;
+export const unlockHint = id => `擊敗${ACTORS[UNLOCK[id]].name}之後，才能招攬他同行。`;
+export const isHired = id => !GENERAL_COST[id] || !!(G.flags.hired && G.flags.hired[id]);
+export function hireGeneral(a, useRes) {
+  const c = GENERAL_COST[a.id];
+  if (!isUnlocked(a.id)) return unlockHint(a.id);
+  if (!pay(useRes ? c.res : { coin: c.coin })) return '錢或資源不夠。';
+  (G.flags.hired || (G.flags.hired = {}))[a.id] = true;
+  audio.play('quest'); G.ui.msg(`🤝 ${a.name} 已被招攬！之後隨時可以邀他同行。`, 'quest'); G.save();
+  return null;
+}
 
 export const costText = c => Object.entries(c).map(([k, n]) => k === 'coin' ? `🪙${n}` : `${ITEMS[k].i}${ITEMS[k].n}${n}`).join(' ');
 export const canPay = c => Object.entries(c).every(([k, n]) => G.player.count(k) >= n);

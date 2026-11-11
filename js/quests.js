@@ -1,14 +1,14 @@
 import { G } from './state.js';
 import { audio } from './audio.js';
-import { ITEMS, ACTORS, ATTENDANTS, ATTENDANT_COST, ATTENDANT_MAX, RECIPES, WEAPONS } from './data.js';
+import { ITEMS, ACTORS, ATTENDANTS, ATTENDANT_COST, ATTENDANT_MAX, RECIPES, WEAPONS, GENERAL_COST } from './data.js';
 import { world } from './world.js';
 import * as SQ from './squad.js';
 
 export const QUESTS = [
   { t: '亂世求生', d: '打開身旁的軍火箱，然後前往東南方的劉備軍營，找劉備談談。', site: 'camp' },
   { t: '討伐黃巾', d: '前往西南方的黃巾營寨，擊殺「大賢良師」張角。可先向劉備招兵買馬，帶兵卒同行。', site: 'turban', boss: 'zhangjiao' },
-  { t: '溫酒斬華雄', d: '渡河前往東北方的汜水關，擊殺華雄。途中的聯軍大營，曹操與孫堅也能招兵。關羽、張飛已可同行。', site: 'sishui', boss: 'huaxiong' },
-  { t: '三英戰呂布', d: '前往西北方的虎牢關，擊敗天下第一武將呂布。趙雲、曹操、孫堅已可同行；建議備妥步槍與震天雷。', site: 'hulao', boss: 'lvbu' },
+  { t: '溫酒斬華雄', d: '渡河前往東北方的汜水關，擊殺華雄。途中的聯軍大營，曹操與孫堅也能招兵。關羽、張飛已可招攬。', site: 'sishui', boss: 'huaxiong' },
+  { t: '三英戰呂布', d: '前往西北方的虎牢關，擊敗天下第一武將呂布。趙雲、曹操、孫堅已可招攬；建議備妥步槍與震天雷。', site: 'hulao', boss: 'lvbu' },
   { t: '誅殺國賊', d: '殺入東南方的郿塢，誅殺董卓，終結這場亂局。', site: 'meiwu', boss: 'dongzhuo' },
   { t: '亂世軍火商', d: '董卓已死。你可以繼續在這個時代自由求生、狩獵與製造軍火。' },
 ];
@@ -46,8 +46,29 @@ const SAY = {
 const BYE = { t: '告辭。' };
 
 // ---------- 名將同行 ----------
+const HIRE = {
+  guanyu: '關某不為錢帛所動……但軍中糧械短缺，先生肯助一臂之力，關某自當報之以刀。',
+  zhangfei: '嘿！俺老張出馬，弟兄們的酒肉糧餉可得備足了！',
+  zhaoyun: '雲願追隨先生。只是麾下白馬義從尚缺糧械，望先生周濟。',
+  caocao: '操向來賞罰分明——足下要操同行，便拿出相應的軍資來。',
+  sunjian: '江東子弟遠道而來，糧草軍械所費不貲。足下若肯資助，孫某便隨你走一遭。',
+  liubei: '備本不該向先生開口……但營中將士久戰疲敝，望先生資助軍糧，備即刻點兵同行。',
+};
+function hireNode(a, note = '') {
+  const c = GENERAL_COST[a.id];
+  const go = useRes => () => { const err = SQ.hireGeneral(a, useRes); return err ? hireNode(a, err) : { text: SAY[a.id].join || '走！', opts: [...followOpt(a), BYE] }; };
+  return {
+    text: (note ? `（${note}）\n` : '') + HIRE[a.id] + '\n（招攬只需付一次，之後可隨時同行或回營。）',
+    opts: [
+      { t: `付 🪙${c.coin}`, dis: !SQ.canPay({ coin: c.coin }), fn: go(false) },
+      { t: `付 ${SQ.costText(c.res)}`, dis: !SQ.canPay(c.res), fn: go(true) },
+      { t: '返回', fn: () => dialogFor(a) },
+    ],
+  };
+}
 function followOpt(a) {
   if (!SAY[a.id] || !SQ.isUnlocked(a.id)) return [];
+  if (!SQ.isHired(a.id)) { const c = GENERAL_COST[a.id]; return [{ t: `招攬 ${a.name}（🪙${c.coin} 或 ${SQ.costText(c.res)}）`, fn: () => hireNode(a) }]; }
   if (a.follow) return [{ t: '請回營待命。', fn: () => { SQ.setGeneralFollow(a, false); return { text: '好，若有戰事，隨時來喚。' }; } }];
   return [{
     t: `請隨我出征！（佔 2 名額，目前 ${SQ.squadUsed()}/${SQ.squadCap()}）`, fn: () => {
@@ -188,9 +209,9 @@ export function dialogFor(a) {
       };
       return {
         text: s === 1 ? '張角盤踞在西南方的黃巾營寨，善使妖術落雷——見地上金光，速速避開！\n雲長、翼德正在操練兵馬，等你立下戰功，他們自會傾力相助。'
-          : s === 2 ? '董卓廢立天子、禍亂朝綱，十八路諸侯已起兵討伐。\n其部將華雄扼守東北方的汜水關。雲長、翼德已摩拳擦掌，可邀他們同去。'
-            : s === 3 ? '呂布號稱「人中呂布，馬中赤兔」，天下無雙。\n雲長、翼德、子龍都可與你同行，讓天下人看看何謂「三英戰呂布」！'
-              : s === 4 ? '董卓老賊龜縮於東南方的郿塢。誅殺此賊，天下可定！備亦願親自隨你出征。'
+          : s === 2 ? '董卓廢立天子、禍亂朝綱，十八路諸侯已起兵討伐。\n其部將華雄扼守東北方的汜水關。雲長、翼德已摩拳擦掌，你可招攬他們同去。'
+            : s === 3 ? '呂布號稱「人中呂布，馬中赤兔」，天下無雙。\n雲長、翼德、子龍都可招攬同行，讓天下人看看何謂「三英戰呂布」！'
+              : s === 4 ? '董卓老賊龜縮於東南方的郿塢。誅殺此賊，天下可定！備亦願親自隨你出征——只是營中糧餉吃緊。'
                 : '先生大恩，備沒齒難忘。這亂世，願與先生同行。',
         opts: lordOpts(a),
       };

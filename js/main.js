@@ -78,7 +78,7 @@ function start(save) {
     const around = i => { const ang = P.yaw + Math.PI + (i - 1.5) * 0.6; return [P.pos.x - Math.sin(ang) * -6, P.pos.z - Math.cos(ang) * -6]; }; // 身後散開
     let i = 0;
     for (const [id, r] of save.squad || []) { const [x, z] = around(i++); spawnRecruit(id, x, z, r); }
-    for (const id of save.gens || []) { const a = G.actors.find(x => x.id === id); if (a) { const [x, z] = around(i++); a.follow = true; a.pos.set(x, 0, z); } }
+    for (const id of save.gens || []) { const a = G.actors.find(x => x.id === id); if (a) { const [x, z] = around(i++); a.follow = true; a.pos.set(x, 0, z); (G.flags.hired || (G.flags.hired = {}))[id] = true; } } // 舊存檔已同行的名將視為已招攬
     reslot();
     if (save.att) for (const o of save.att) giveAttendant(o.spec, P.pos.x + rnd(-2, 2), P.pos.z + rnd(-2, 2), o);
     else if (G.stage >= 1) giveAttendant('all'); // 舊存檔：補發劉備贈送的侍從
@@ -172,9 +172,9 @@ G.sleep = () => {
   }, 800);
 };
 const UNLOCK_MSG = {
-  zhangjiao: '關羽、張飛願意與你並肩作戰了！回劉備軍營邀請他們同行。',
-  huaxiong: '趙雲、曹操、孫堅願意與你同行了！（演義中華雄是關羽溫酒所斬——這回你搶先了一步。）',
-  lvbu: '劉備決定親自隨你出征！',
+  zhangjiao: '關羽、張飛可以招攬了！回劉備軍營找他們。',
+  huaxiong: '趙雲、曹操、孫堅可以招攬了！（演義中華雄是關羽溫酒所斬——這回你搶先了一步。）',
+  lvbu: '劉備願意親自隨你出征——到軍營招攬他吧！',
 };
 G.onKill = (a) => {
   if (a.def.boss) {
