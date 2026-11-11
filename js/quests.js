@@ -6,6 +6,8 @@ import * as SQ from './squad.js';
 import * as OD from './orders.js';
 import { raining } from './weather.js';
 import * as WK from './workshop.js';
+import * as CH from './chapters.js';
+import * as BMK from './blackmarket.js';
 
 export const QUESTS = [
   { t: '亂世求生', d: '打開身旁的軍火箱，然後前往東南方的劉備軍營，找劉備談談。', site: 'camp' },
@@ -13,14 +15,22 @@ export const QUESTS = [
   { t: '溫酒斬華雄', d: '渡河前往東北方的汜水關，擊殺華雄。途中的聯軍大營，曹操與孫堅也能招兵。關羽、張飛已可招攬。', site: 'sishui', boss: 'huaxiong' },
   { t: '三英戰呂布', d: '前往西北方的虎牢關，擊敗天下第一武將呂布。趙雲、曹操、孫堅已可招攬；建議備妥步槍與震天雷。', site: 'hulao', boss: 'lvbu' },
   { t: '誅殺國賊', d: '殺入東南方的郿塢，誅殺董卓，終結這場亂局。', site: 'meiwu', boss: 'dongzhuo' },
-  { t: '亂世軍火商', d: '董卓已死。你可以繼續在這個時代自由求生、狩獵與製造軍火。' },
+  { t: '官渡之戰・白馬延津', d: '袁紹起兵南下。前往西方的白馬斬顏良、西方偏北的延津誅文醜（兩人都要擊敗）。', bosses: ['yanliang', 'wenchou'], bossSites: { yanliang: 'baima', wenchou: 'yanjin' } },
+  { t: '火燒烏巢', d: '袁紹的糧草囤在南方的烏巢。用燃燒彈或震天雷，把糧倉全部燒光！', site: 'wuchao', burn: 'wuchao' },
+  { t: '長坂坡', d: '曹操翻臉南下追擊！前往北方的長坂橋，在東側橋頭守住 75 秒，再擊敗曹將夏侯恩。', site: 'changban', boss: 'xiahouen' },
+  { t: '赤壁之戰', d: '曹軍戰船以鐵索相連，停泊在東南方赤壁的江面上。火燒連環船，再擊退曹操！', site: 'chibi', boss: 'caocao_e' },
+  { t: '天下三分', d: '曹操敗走，三分天下之勢已成。你可以繼續在這個時代自由經營、求生。' },
 ];
 
 const REWARD = {
   1: () => { G.player.give('coin', 200); return '獲得賞金 200 五銖錢。'; },
   2: () => { G.player.give('coin', 300); G.player.give('iron', 10); return '獲得賞金 300 五銖錢與 10 鐵礦。'; },
   3: () => { G.player.give('coin', 500); G.spawnRedHare(); return '獲得賞金 500 五銖錢。呂布的坐騎「赤兔馬」留在了虎牢關前！'; },
-  4: () => { G.player.give('coin', 1000); return ''; },
+  4: () => { G.player.give('coin', 1000); return '獲得賞金 1000 五銖錢。'; },
+  5: () => { G.player.give('coin', 600); return '獲得賞金 600 五銖錢。'; },
+  6: () => { G.player.give('coin', 500); G.player.give('powder', 10); return '獲得賞金 500 五銖錢與 10 黑火藥。'; },
+  7: () => { G.player.give('coin', 700); return '獲得賞金 700 五銖錢。'; },
+  8: () => { G.player.give('coin', 1500); return '獲得賞金 1500 五銖錢。'; },
 };
 
 export function advance() {
@@ -29,12 +39,18 @@ export function advance() {
   const r = REWARD[done] ? REWARD[done]() : '';
   G.ui.msg(`任務完成：${q.t}。${r}`, 'quest'); G.ui.msg(`新任務：${QUESTS[G.stage].t}`, 'quest');
   audio.play('quest'); G.save();
-  if (done === 4) setTimeout(() => G.ui.open('win'), 2500);
+  if (G.onStage) G.onStage(done);
 }
 // 擊殺頭目即推進（提前擊殺也算數）
 export function checkQuest() {
   const q = QUESTS[G.stage];
-  if (q && q.boss && G.killed[q.boss]) advance();
+  if (!q) return;
+  if ((q.boss && G.killed[q.boss]) || (q.bosses && q.bosses.every(b => G.killed[b])) || (q.burn && CH.allBurned(q.burn))) advance();
+}
+// 目前任務指向的據點（白馬／延津依未擊敗的頭目切換）
+export function questSite(q = QUESTS[G.stage]) {
+  if (q.bossSites) { for (const b of q.bosses) if (!G.killed[b]) return q.bossSites[b]; return null; }
+  return q.site || null;
 }
 
 
@@ -220,6 +236,37 @@ function attendantOpts(a, back = text => ({ text, opts: attendantOpts(a) })) {
   return o;
 }
 
+// ---------- 黑市掮客：軍火外流 ----------
+function brokerDialog(a, note = '') {
+  const B = BMK.BM, P = G.player;
+  const opts = [{ t: '你收些什麼貨？', fn: () => brokerSell(a) }];
+  if (G.stage >= BMK.BLUEPRINT.stage && !B.blueprint) opts.push({ t: `……火器圖紙，你出多少？（🪙${BMK.BLUEPRINT.coin}）`, fn: () => blueprintNode(a) });
+  opts.push({ t: '買家到底是誰？', fn: () => brokerDialog(a, `掮客壓低聲音：「客官既然問了……這批貨，是往${BMK.buyer()}那邊去的。」`) });
+  opts.push(BYE);
+  return {
+    text: (note ? note + '\n' : '') + '「客官，要出貨嗎？價錢好說——比糜竺那兒高一倍。\n至於貨最後到了誰手上，您就別多問了。」' + (B.leak ? `\n（目前外流的軍火價值：🪙${B.leak}；敵軍火銃兵出現率 ${Math.round(BMK.gunRate() * 100)}%）` : ''),
+    opts,
+  };
+}
+function brokerSell(a, note = '') {
+  const P = G.player, B = BMK.BM;
+  if (!B.warned) return {
+    text: '（你很清楚：賣到這裡的軍火，會流進敵軍手裡。\n賣得越多，戰場上就會出現越多拿著火銃的敵兵，結局也會因此改變。）',
+    opts: [{ t: '生意就是生意。', fn: () => { B.warned = true; return brokerSell(a); } }, { t: '……算了，告辭。' }],
+  };
+  const items = Object.keys(BMK.BM_PRICE).filter(k => P.count(k) > 0);
+  return {
+    text: (note ? note + '\n' : '') + (items.length ? '「這些貨我全收，現錢交易。」' : '「客官身上沒什麼好貨啊。震天雷、地雷、彈藥、火藥，我都收。」'),
+    opts: [...items.map(k => ({ t: `賣出全部 ${ITEMS[k].i}${ITEMS[k].n}×${P.count(k)}（🪙${BMK.BM_PRICE[k] * P.count(k)}）`, fn: () => brokerSell(a, '✔ ' + BMK.sellAll(k)) })), { t: '返回', fn: () => brokerDialog(a) }],
+  };
+}
+function blueprintNode(a) {
+  return {
+    text: `「圖紙？！客官若肯割愛，${BMK.BLUEPRINT.coin} 錢現付！」\n（交出圖紙，敵軍就能自己大量仿造火器——這是無法挽回的決定。）`,
+    opts: [{ t: '成交。', fn: () => brokerDialog(a, '✔ ' + BMK.sellBlueprint()) }, { t: '不，這東西絕不能外流。', fn: () => brokerDialog(a, '「可惜了……客官改變心意，隨時再來。」') }],
+  };
+}
+
 export function dialogFor(a) {
   const P = G.player, s = G.stage;
   if (a.id === 'attendant') return attendantDialog(a);
@@ -244,14 +291,21 @@ export function dialogFor(a) {
           })
         }]
       };
-      return {
+      const node = {
         text: s === 1 ? '張角盤踞在西南方的黃巾營寨，善使妖術落雷——見地上金光，速速避開！\n雲長、翼德正在操練兵馬，等你立下戰功，他們自會傾力相助。'
           : s === 2 ? '董卓廢立天子、禍亂朝綱，十八路諸侯已起兵討伐。\n其部將華雄扼守東北方的汜水關。雲長、翼德已摩拳擦掌，你可招攬他們同去。'
             : s === 3 ? '呂布號稱「人中呂布，馬中赤兔」，天下無雙。\n雲長、翼德、子龍都可招攬同行，讓天下人看看何謂「三英戰呂布」！'
               : s === 4 ? '董卓老賊龜縮於東南方的郿塢。誅殺此賊，天下可定！備亦願親自隨你出征——只是營中糧餉吃緊。'
-                : '先生大恩，備沒齒難忘。這亂世，願與先生同行。',
+                : s === 5 ? '袁紹擁兵河北，遣顏良、文醜南下。曹孟德與之對峙官渡——\n先生可往白馬、延津，挫其銳氣。'
+                  : s === 6 ? '袁紹的命脈在烏巢糧草。先生的火器，正是燒糧的利器！'
+                    : s === 7 ? '曹操終究容不下備……他已率大軍南下追擊。\n長坂橋是百姓南逃的必經之路，請先生務必守住！'
+                      : s === 8 ? '曹操八十三萬大軍屯於赤壁，戰船以鐵索相連。\n孔明說，只欠東風——而先生手中，正有火。'
+                        : '先生大恩，備沒齒難忘。這亂世，願與先生同行。',
         opts: lordOpts(a),
       };
+      if (BMK.leakTier() > 0) node.text = (BMK.BM.blueprint ? '……敵軍竟有成隊的火銃兵。先生，那圖紙……備不願多問。\n' : '近來敵軍中出現了火器……備相信先生，但人言可畏。\n') + node.text;
+      return node;
+    case 'broker': return brokerDialog(a);
     default: {
       const say = SAY[a.id]; if (!say) return { text: '……' };
       if (s < 1) return { text: '大哥正在中軍帳前，有事請先與他商議。' };

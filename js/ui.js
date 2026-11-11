@@ -1,9 +1,10 @@
 import { G } from './state.js';
 import { ITEMS, WEAPONS, HOTBAR, RECIPES, SHOP_BUY, SHOP_SELL } from './data.js';
-import { SITES, riverX, HALF } from './world.js';
+import { SITES, riverX, HALF, HOSTILE_SITES } from './world.js';
 import { audio } from './audio.js';
 import { angDiff } from './util.js';
-import { QUESTS, dialogFor } from './quests.js';
+import { QUESTS, dialogFor, questSite } from './quests.js';
+import { BM, gunRate } from './blackmarket.js';
 import { resetInput } from './player.js';
 import { SQUAD_CMDS } from './data.js';
 import { followers, squadUsed, squadCap } from './squad.js';
@@ -112,6 +113,7 @@ export const ui = {
     h += '<h3>聲望</h3><div class="grid">';
     for (const id in OD.ISSUERS) { const t = OD.repTier(id); h += `<div class="cell">${OD.ISSUERS[id].n}<b>${t.n}</b><br><span class="dim">${OD.OR.rep[id]} 點${t.disc < 1 ? `・${t.disc * 10} 折` : ''}${t.elite && id !== 'mizhu' ? '・可招精銳' : ''}</span></div>`; }
     h += '</div><p class="dim">準時交貨提升聲望：15 點「信賴」9 折、35 點「摯友」8 折並可招募精銳兵種。逾期扣 6 點。</p>';
+    if (BM.leak) h += `<h3>軍火外流</h3><p class="dim">賣給黑市的軍火：🪙${BM.leak}${BM.blueprint ? '（含火器圖紙）' : ''}　敵軍火銃兵出現率 ${Math.round(gunRate() * 100)}%。外流越多，結局越黑暗。</p>`;
     box.innerHTML = h;
   },
   renderBag() {
@@ -141,9 +143,9 @@ export const ui = {
     g.textAlign = 'center'; g.font = 'bold 15px serif';
     const q = QUESTS[G.stage];
     for (const id in SITES) {
-      const s = SITES[id], hostile = ['turban', 'sishui', 'hulao', 'meiwu'].includes(id);
+      const s = SITES[id], hostile = HOSTILE_SITES.includes(id);
       g.fillStyle = hostile ? '#c8402a' : '#5ac86a'; g.beginPath(); g.arc(X(s.x), Z(s.z), 7, 0, 7); g.fill();
-      if (q && q.site === id) { g.strokeStyle = '#ffd24a'; g.lineWidth = 3; g.beginPath(); g.arc(X(s.x), Z(s.z), 12, 0, 7); g.stroke(); }
+      if (q && questSite(q) === id) { g.strokeStyle = '#ffd24a'; g.lineWidth = 3; g.beginPath(); g.arc(X(s.x), Z(s.z), 12, 0, 7); g.stroke(); }
       g.fillStyle = '#f4e8c8'; g.fillText(s.name, X(s.x), Z(s.z) - 14);
     }
     g.fillStyle = '#d8cfb8'; g.fillText('北', S / 2, 14);
@@ -238,7 +240,7 @@ export const ui = {
     if (this.dirty || P.reloadT > 0 !== last.rl) {
       this.dirty = false; last.rl = P.reloadT > 0;
       const w = WEAPONS[P.cur];
-      el.hotbar.innerHTML = HOTBAR.map((id, i) => G.touch && !P.owned[id] ? '' : `<div class="slot ${P.cur === id ? 'on' : ''} ${P.owned[id] ? '' : 'no'}" data-slot="${id}"><small>${i + 1}</small>${WEAPONS[id].i}<em>${P.owned[id] ? WEAPONS[id].n : ''}</em></div>`).join('');
+      el.hotbar.innerHTML = HOTBAR.filter(id => P.owned[id]).map((id, i) => `<div class="slot ${P.cur === id ? 'on' : ''}" data-slot="${id}"><small>${i < 10 ? (i + 1) % 10 : ''}</small>${WEAPONS[id].i}<em>${WEAPONS[id].n}</em></div>`).join(''); // 只顯示已擁有的兵器
       el['ammo-w'].textContent = w.n + (P.reloadT > 0 ? '　換彈中…' : '');
       el['ammo-n'].innerHTML = w.type === 'gun' ? `${P.mags[P.cur]} <small>/ ${w.ammo ? P.count(w.ammo) : '∞'}</small>` : w.type === 'bow' ? `${P.count('arrow')} <small>箭</small>` : '';
       const food = P.count('cooked') + P.count('ration') + P.count('berry') + P.count('meat');
@@ -255,11 +257,13 @@ export const ui = {
     const q = QUESTS[G.stage];
     if (last.stage !== G.stage) { last.stage = G.stage; el['quest-t'].textContent = '【' + q.t + '】'; el['quest-d'].textContent = q.d; }
     let qa = null;
-    if (q.site) {
-      const s = SITES[q.site], dx = s.x - P.pos.x, dz = s.z - P.pos.z, d = Math.round(Math.hypot(dx, dz) / 5) * 5;
-      if (last.qd !== d) { last.qd = d; el['quest-dist'].textContent = `▸ ${s.name}　${d} 步`; }
+    const qs = questSite(q);
+    if (qs) {
+      const s = SITES[qs], dx = s.x - P.pos.x, dz = s.z - P.pos.z, d = Math.round(Math.hypot(dx, dz) / 5) * 5;
+      const txt = `▸ ${s.name}　${d} 步` + (G.objText ? `　${G.objText}` : '');
+      if (last.qd !== txt) { last.qd = txt; el['quest-dist'].textContent = txt; }
       qa = Math.atan2(-dx, -dz);
-    } else if (last.qd !== -1) { last.qd = -1; el['quest-dist'].textContent = ''; }
+    } else if (last.qd !== '') { last.qd = ''; el['quest-dist'].textContent = ''; }
     const cw = el['compass-in'].clientWidth || 300;
     for (const s of el['compass-in'].children) {
       const a = s === el.qmark ? qa : +s.dataset.a;
@@ -308,7 +312,7 @@ export const ui = {
     g.font = 'bold 11px serif'; g.textAlign = 'center';
     const q = QUESTS[G.stage];
     for (const id in SITES) {
-      const s = SITES[id]; let x = X(s.x), z = Z(s.z); const isQ = q.site === id;
+      const s = SITES[id]; let x = X(s.x), z = Z(s.z); const isQ = questSite(q) === id;
       const dx = x - S / 2, dz = z - S / 2, d = Math.hypot(dx, dz);
       if (d > S / 2 - 8) { if (!isQ) continue; x = S / 2 + dx / d * (S / 2 - 9); z = S / 2 + dz / d * (S / 2 - 9); }
       else { g.fillStyle = 'rgba(138,115,80,.6)'; g.beginPath(); g.arc(x, z, s.r * k, 0, 7); g.fill(); }

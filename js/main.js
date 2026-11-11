@@ -11,13 +11,15 @@ import { ui } from './ui.js';
 import { audio } from './audio.js';
 import { checkQuest } from './quests.js';
 import { spawnRecruit, giveAttendant, reslot, followers, cycleCommand } from './squad.js';
+import { syncChapters, updateChapters, restoreBurned, spawnEnemy } from './chapters.js';
+import { BM, loadBM, ending } from './blackmarket.js';
 import { rnd, rndInt, pick, dist2 } from './util.js';
 
 const PI = Math.PI, KEY = 'sanguo-arms-dealer-save-v1';
 const canvas = document.getElementById('game');
 let lastT = 0, started = false, basePR = 1, resScale = 1, fpsN = 0, fpsT = 0, resHold = 0;
 const timers = { patrol: 40, wolf: 20, sec: 1, save: 45, deer: 10 };
-const camps = [];
+const camps = G.camps = [];
 
 // ------------------------------------------------------------------ 初始化
 function init() {
@@ -92,6 +94,8 @@ function start(save) {
   }
   if (G.flags.crate) for (const n of world.nodeList) if (n.kind === 'crate') n.stock = 0;
   if (G.flags.redHare && !(save && save.p.horse === 'red')) G.spawnRedHare();
+  if (save) loadBM(save.bm);
+  restoreBurned(); syncChapters();
   started = true; G.started = true; showRotateHint(G.touch && innerWidth < innerHeight);
   document.getElementById('hud').classList.remove('hidden');
   if (G.touch) document.getElementById('touch').classList.remove('hidden');
@@ -117,7 +121,7 @@ function landNear(cx, cz, rmin, rmax, pad = 6) {
 }
 function garrison(boss, list) {
   const camp = { boss, members: list.map(([id, x, z]) => ({ id, x, z, actor: null })) };
-  if (!G.killed[boss]) for (const m of camp.members) m.actor = new Actor(m.id, m.x, m.z);
+  if (!G.killed[boss]) for (const m of camp.members) m.actor = m.id === boss ? new Actor(m.id, m.x, m.z) : spawnEnemy(m.id, m.x, m.z);
   camps.push(camp);
 }
 const ring = (cx, cz, n, r0, r1, types, a0 = 0, a1 = PI * 2) => Array.from({ length: n }, (_, i) => { const a = a0 + (a1 - a0) * (i + rnd(0.6)) / n, r = rnd(r0, r1); return [pick(types), cx + Math.cos(a) * r, cz + Math.sin(a) * r]; });
@@ -138,6 +142,7 @@ function populate() {
   general('caocao', sp.caocao, [co[0], co[1] + 10]); general('sunjian', sp.sunjian, [co[0], co[1] + 10]);
   for (const [dx, dz] of [[-12, 8], [12, 8], [-4, 16], [5, 17], [-20, -2], [20, -3]]) { const a = new Actor('co_soldier', co[0] + dx, co[1] + dz); a.homeYaw = a.yaw = 0; }
   for (let i = 0; i < 2; i++) spawnHorse(sp.coHorse[0] + i * 3, sp.coHorse[1], false, true);
+  general('broker', sp.broker, [SITES.blackmarket.x + 3, SITES.blackmarket.z + 2]); // 黑市掮客
 
   // 敵營
   const T3 = ['turban_blade', 'turban_spear', 'turban_archer', 'turban_blade'], X3 = ['xl_blade', 'xl_spear', 'xl_archer', 'xl_blade'];
@@ -182,6 +187,7 @@ const UNLOCK_MSG = {
   zhangjiao: '關羽、張飛可以招攬了！回劉備軍營找他們。',
   huaxiong: '趙雲、曹操、孫堅可以招攬了！（演義中華雄是關羽溫酒所斬——這回你搶先了一步。）',
   lvbu: '劉備願意親自隨你出征——到軍營招攬他吧！',
+  yanliang: '（演義中顏良是關羽在白馬陣前所斬——這回換你立了頭功。）',
 };
 G.onKill = (a) => {
   if (a.def.boss) {
@@ -190,6 +196,13 @@ G.onKill = (a) => {
   }
 };
 G.cycleCommand = cycleCommand;
+G.checkQuest = checkQuest;
+// 主線推進：生成新章節敵營；赤壁之後顯示結局
+G.onStage = done => {
+  syncChapters();
+  if (done === 4) setTimeout(() => ui.msg('董卓伏誅，然而天下並未太平——袁紹已在北方起兵。', 'quest'), 2500);
+  if (done === 8) setTimeout(() => { const e = ending(); document.getElementById('win-title').textContent = e.title; document.getElementById('win-story').innerHTML = e.text; ui.open('win'); }, 3000);
+};
 G.openWorkshop = openWorkshop;
 G.wsDeposit = depositFromAttendant;
 // 玩家倒下被救回營地：隨行部隊與侍從一起撤回
@@ -206,23 +219,27 @@ G.save = () => {
     squad: followers().filter(a => a.recruited).map(a => [a.id, +(a.hp / a.maxHp).toFixed(2)]),
     gens: followers().filter(a => a.def.general).map(a => a.id),
     att: G.attendants.map(a => ({ spec: a.spec, inv: a.inv, focus: a.focus, wait: a.wait, waitPos: a.waitPos, ws: !!a.ws })),
-    cmd: G.squadCmd, orders: OR, ws: saveWorkshop() };
+    cmd: G.squadCmd, orders: OR, ws: saveWorkshop(), bm: BM };
   try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { }
 };
 
 // ------------------------------------------------------------------ 導演：巡邏、夜襲、狼群、重生
-function enemyTypes() { return G.stage < 2 ? ['turban_blade', 'turban_spear', 'turban_archer', 'turban_blade'] : G.stage < 3 ? ['turban_blade', 'xl_blade', 'xl_spear', 'xl_archer'] : ['xl_blade', 'xl_spear', 'xl_archer', 'xl_blade', 'xl_cav']; }
+function enemyTypes() {
+  const s = G.stage;
+  return s < 2 ? ['turban_blade', 'turban_spear', 'turban_archer', 'turban_blade'] : s < 3 ? ['turban_blade', 'xl_blade', 'xl_spear', 'xl_archer'] : s < 5 ? ['xl_blade', 'xl_spear', 'xl_archer', 'xl_blade', 'xl_cav']
+    : s < 7 ? ['yuan_blade', 'yuan_spear', 'yuan_archer', 'yuan_blade', 'yuan_cav'] : ['cao_blade', 'cao_spear', 'cao_archer', 'cao_blade', 'cao_cav'];
+}
 function spawnGroup(n, rmin, rmax, hunt) {
   const P = player, p = landNear(P.pos.x, P.pos.z, rmin, rmax); if (!p) return false;
   const types = enemyTypes();
-  for (let i = 0; i < n; i++) { const a = new Actor(pick(types), p[0] + rnd(-5, 5), p[1] + rnd(-5, 5), { roam: true }); if (hunt) { a.alert = 40; a.target = P; } }
+  for (let i = 0; i < n; i++) { const a = spawnEnemy(pick(types), p[0] + rnd(-5, 5), p[1] + rnd(-5, 5), { roam: true }); if (hunt) { a.alert = 40; a.target = P; } }
   return true;
 }
 function onDawn() {
   const P = player;
   for (const c of camps) {
     if (G.killed[c.boss] || dist2(P.pos.x, P.pos.z, c.members[0].x, c.members[0].z) < 170) continue;
-    for (const m of c.members) if (m.actor && !m.actor.alive && !m.actor.def.boss) m.actor = new Actor(m.id, m.x, m.z);
+    for (const m of c.members) if (m.actor && !m.actor.alive && !m.actor.def.boss) m.actor = spawnEnemy(m.id, m.x, m.z);
   }
   // 陣亡的友軍士卒補員
   const sp = world.spots, allies = G.actors.filter(a => a.alive && a.id === 'ally_soldier').length;
@@ -295,9 +312,40 @@ function adaptResolution(t) {
 const M4 = new THREE.Matrix4(), UP = new THREE.Vector3(0, 1, 0), QA = new THREE.Quaternion(), QB = new THREE.Quaternion();
 const ease = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
 const lookQ = (eye, target, out) => out.setFromRotationMatrix(M4.lookAt(eye, target, UP));
-function checkArena() {
-  if (!player.alive) return;
-  for (const a of G.actors) if (a.alive && a.arena && !G.flags['intro_' + a.id] && a.inArena(player)) { startCutscene(a); return; }
+let askT = 0;
+function checkArena(dt) {
+  const P = player;
+  // 進行中的戰鬥：敵將倒下或玩家離開決戰圈太久就結束
+  const B = G.battle;
+  if (B) {
+    if (!B.boss.alive) G.battle = null;
+    else if (!P.alive || !B.boss.inArena(P)) { B.out = (B.out || 0) + dt; if (B.out > 4 || !P.alive) { if (B.mode === 'duel') ui.msg(`你退出了與${B.boss.name}的單挑。`, 'warn'); G.battle = null; askT = G.now + 3; } }
+    else B.out = 0;
+    return;
+  }
+  if (!P.alive) return;
+  for (const a of G.actors) {
+    if (!a.alive || !a.arena || !a.inArena(P)) continue;
+    if (!G.flags['intro_' + a.id]) { startCutscene(a); return; }
+    if (G.now > askT) { askBattle(a); return; }
+  }
+}
+// 單挑或群戰
+function askBattle(boss) {
+  const n = followers().length;
+  ui.showDialog(boss, {
+    text: `${boss.name}橫刀立馬，目光如炬。\n要與他一對一單挑，還是率眾群戰？` + (n ? `\n（目前有 ${n} 名隨行部隊）` : ''),
+    opts: [
+      { t: '⚔ 單挑——隊友退到圈外觀戰；勝利賞金加倍，必定奪得專屬兵器', fn: () => { startBattle(boss, 'duel'); return null; } },
+      { t: '🛡 群戰——率領部隊一起上（專屬兵器 25% 機率掉落）', fn: () => { startBattle(boss, 'group'); return null; } },
+    ],
+  });
+}
+function startBattle(boss, mode) {
+  G.battle = { boss, mode, out: 0 };
+  boss.alert = 30; boss.target = player; boss.atkT = 1;
+  ui.msg(mode === 'duel' ? `⚔ 與${boss.name}單挑！隊友不會插手，敵兵也在旁觀戰。離開決戰圈就算退出。` : `🛡 與${boss.name}群戰！在決戰圈內才能傷到他。`, 'quest');
+  if (mode === 'duel') audio.play('clang', 0.8);
 }
 function startCutscene(boss) {
   G.flags['intro_' + boss.id] = true;
@@ -330,8 +378,7 @@ function endCutscene() {
   const c = G.cutscene; if (!c) return;
   for (const [o, v] of c.vis) o.visible = v;
   G.cutscene = null; G.menu = null; ui.cine(false);
-  c.boss.alert = 30; c.boss.target = player; c.boss.atkT = 1;
-  ui.msg(`⚔ 與 ${c.boss.name} 決戰！在決戰圈內才能傷到他，離開圈子他會慢慢回復。`, 'quest');
+  askBattle(c.boss);
 }
 G.skipCutscene = () => endCutscene();
 
@@ -360,13 +407,13 @@ function frame(t) {
   } else if (!G.menu) {
     G.now += dt;
     director(dt);
-    updateWeather(dt); tickWorkshop(dt);
+    updateWeather(dt); tickWorkshop(dt); updateChapters(dt);
     updatePlayer(dt);
     for (const a of G.actors) a.update(dt);
     for (const a of G.animals) a.update(dt);
     for (const a of G.attendants) a.update(dt);
     separate();
-    checkArena();
+    checkArena(dt);
     updateProjectiles(dt); updatePickups(dt); updateEffects(dt); updateNodes(dt); updateMines(dt);
     updateSky(dt, cam.position);
     ui.update(dt);

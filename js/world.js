@@ -15,7 +15,15 @@ export const SITES = {
   hulao: { x: -180, z: -300, r: 40, name: '虎牢關' },
   meiwu: { x: 340, z: 290, r: 46, name: '郿塢' },
   workshop: { x: 40, z: 31, r: 13, name: '軍火工坊' },
+  // ---- 新章節 ----
+  baima: { x: -330, z: -80, r: 34, name: '白馬' },
+  yanjin: { x: -300, z: 60, r: 34, name: '延津' },
+  wuchao: { x: -40, z: 330, r: 40, name: '烏巢' },
+  changban: { x: riverX(-330), z: -330, r: 42, name: '長坂橋', noFlat: true },
+  chibi: { x: 252, z: 238, r: 30, name: '赤壁' },
+  blackmarket: { x: -90, z: -70, r: 10, name: '黑市' },
 };
+export const HOSTILE_SITES = ['turban', 'sishui', 'hulao', 'meiwu', 'baima', 'yanjin', 'wuchao', 'changban', 'chibi'];
 
 export function riverX(z) { return 150 + 45 * Math.sin(z / 110) + 20 * Math.sin(z / 37); }
 function baseHeight(x, z) {
@@ -31,6 +39,7 @@ function siteHeight(x, z) {
   let h = baseHeight(x, z);
   for (const k in SITES) {
     const s = SITES[k], d = dist2(x, z, s.x, s.z);
+    if (s.noFlat) continue;
     if (d < s.r + 30) h = lerp(h, s.y, 1 - smoothstep(s.r, s.r + 30, d));
   }
   return h;
@@ -51,8 +60,11 @@ export function heightAt(x, z) {
   const fx = clamp((x + HALF) / CELL, 0, SEG - 0.001), fz = clamp((z + HALF) / CELL, 0, SEG - 0.001);
   const ix = Math.floor(fx), iz = Math.floor(fz), u = fx - ix, v = fz - iz;
   const i = iz * N1 + ix;
-  return lerp(lerp(heights[i], heights[i + 1], u), lerp(heights[i + N1], heights[i + N1 + 1], u), v);
+  let h = lerp(lerp(heights[i], heights[i + 1], u), lerp(heights[i + N1], heights[i + N1 + 1], u), v);
+  for (const b of bridges) if (x > b.x0 && x < b.x1 && z > b.z0 && z < b.z1 && h < b.y) h = b.y; // 橋面可行走
+  return h;
 }
+const bridges = [];
 export function inSite(x, z, pad = 0) {
   for (const k in SITES) { const s = SITES[k]; if (dist2(x, z, s.x, s.z) < s.r + pad) return s; }
   return null;
@@ -62,7 +74,7 @@ export const world = {
   colliders: new Grid(8),
   nodes: new Grid(8),      // 可互動資源點
   nodeList: [],
-  fires: [], flags: [], enclosures: [],
+  fires: [], flags: [], enclosures: [], targets: [], burning: [],
   beds: [], spots: {},     // 各據點內的重要位置
   heightAt, inSite,
   isNight: false, dayF: 1,
@@ -258,6 +270,8 @@ export function updateSky(dt, camPos) {
   for (const f of world.fires) { if (f.light) f.light.intensity = f.base * (0.85 + 0.25 * Math.sin(t * 11 + f.ph) * Math.sin(t * 7.3)); f.flame.scale.y = 1 + 0.25 * Math.sin(t * 13 + f.ph); }
   for (const f of world.flags) f.rotation.y = f.userData.ry + Math.sin(t * 1.6 + f.userData.ph) * 0.25;
   if (world.portal) { world.portal.rotation.z += dt * 0.8; world.portal.material.opacity = 0.55 + 0.25 * Math.sin(t * 3); }
+  for (const b of world.burning) { b.t -= dt; for (const f of b.fl) f.scale.y = (0.8 + 0.4 * Math.sin(t * 11 + f.userData.ph)) * Math.min(1, b.t / 4); if (b.t <= 0) { G.scene.remove(b.grp); } }
+  world.burning = world.burning.filter(b => b.t > 0);
 }
 
 // ---- 植被 ----
@@ -446,6 +460,107 @@ function wallBox(scene, x0, z0, x1, z1, H) {
   world.addBox(x0, z0, x1, z1, H);
 }
 
+// ---- 可燒毀的目標（烏巢糧倉、赤壁戰船）：只怕火攻與爆炸 ----
+const charMat = new THREE.MeshLambertMaterial({ vertexColors: true, color: 0x3a3430 });
+const burnMat = new THREE.MeshBasicMaterial({ color: 0xff8a20, transparent: true, opacity: 0.9, fog: false, depthWrite: false });
+const burnGeo = new THREE.ConeGeometry(0.7, 2.6, 5);
+export function damageTargets(x, z, radius, amount) {
+  let n = 0;
+  for (const t of world.targets) {
+    if (t.burned || dist2(x, z, t.x, t.z) > radius + t.r) continue;
+    t.hp -= amount;
+    if (t.hp <= 0) {
+      t.burned = true; n++;
+      t.mesh.material = charMat;
+      const grp = new THREE.Group(), fl = [];
+      for (let i = 0; i < 6; i++) {
+        const f = new THREE.Mesh(burnGeo, burnMat), a = i / 6 * PI * 2, r = t.r * 0.5;
+        f.position.set(t.x + Math.cos(a) * r, t.y + t.fy + Math.random(), t.z + Math.sin(a) * r * (t.kind === 'ship' ? 2.4 : 1));
+        f.userData.ph = Math.random() * 6; grp.add(f); fl.push(f);
+      }
+      G.scene.add(grp); world.burning.push({ grp, fl, t: 40 });
+      if (world.onBurn) world.onBurn(t);
+      if (t.kind === 'ship') { // 鐵索連環：火勢延燒到相鄰戰船
+        const nb = world.targets.filter(o => o.kind === 'ship' && !o.burned && dist2(o.x, o.z, t.x, t.z) < 14);
+        setTimeout(() => { for (const o of nb) damageTargets(o.x, o.z, 0.5, 70); }, 2500);
+      }
+    }
+  }
+  return n;
+}
+function target(kind, id, mesh, x, z, r, hp, fy) { world.targets.push({ kind, id, mesh, x, z, y: heightAt(x, z), r, hp, max: hp, fy, burned: false }); }
+
+// ---- 新章節據點 ----
+function enemyCamp(scene, id, tentColor, chars, flagBg) {
+  const s = SITES[id], cx = s.x, cz = s.z, ga = Math.atan2(SITES.camp.z - cz, SITES.camp.x - cx);
+  palisade(scene, cx, cz, s.r - 3, ga, 0.26, 0x5a4a30);
+  for (let i = 0; i < 6; i++) { const a = ga + 1 + i / 6 * 4.3; tent(scene, cx + Math.cos(a) * (s.r - 12), cz + Math.sin(a) * (s.r - 12), tentColor, 0.95, -a + PI / 2); }
+  flag(scene, cx - 4, cz - 4, chars[0], flagBg, '#f4e8b0', 9); flag(scene, cx + 4, cz - 4, chars[1], flagBg, '#f4e8b0', 9);
+  campfire(scene, cx + 8, cz + 6); campfire(scene, cx - 8, cz + 7);
+  tower(scene, cx + Math.cos(ga + 0.4) * (s.r - 3), cz + Math.sin(ga + 0.4) * (s.r - 3));
+  world.spots[id] = [cx, cz];
+}
+function buildChapterSites(scene) {
+  const S = SITES, sp = world.spots;
+  enemyCamp(scene, 'baima', 0x9a8040, '袁顏', '#6a5020');
+  enemyCamp(scene, 'yanjin', 0x9a8040, '袁文', '#6a5020');
+  { // 烏巢糧倉
+    const s = S.wuchao, cx = s.x, cz = s.z, ga = Math.atan2(S.camp.z - cz, S.camp.x - cx);
+    palisade(scene, cx, cz, 37, ga, 0.24, 0x5a4a30);
+    flag(scene, cx - 4, cz - 3, '袁', '#6a5020', '#f4e8b0', 9); flag(scene, cx + 4, cz - 3, '糧', '#6a5020', '#f4e8b0', 9);
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * PI * 2 + 0.3, x = cx + Math.cos(a) * 19, z = cz + Math.sin(a) * 19, y = heightAt(x, z);
+      const p = [cyl(2.3, 2.5, 2.6, 10, 0xb89a60, 0, 1.3, 0), cone(2.9, 2.2, 10, 0xc8a850, 0, 3.7, 0), cyl(0.12, 0.12, 0.6, 5, 0x5a4020, 0, 5, 0)];
+      for (let k = 0; k < 4; k++) p.push(bx(0.9, 0.5, 0.6, 0xd8c890, 2.8, 0.25 + (k >> 1) * 0.5, -0.5 + (k & 1)));
+      const m = meshOf(p, true); m.position.set(x, y, z); scene.add(m);
+      world.addCircle(x, z, 2.5, 4); target('granary', 'wuchao', m, x, z, 2.6, 100, 3);
+    }
+    tent(scene, cx + 6, cz + 6, 0x9a8040, 1.2, 0.4); tent(scene, cx - 7, cz + 5, 0x9a8040, 1, -0.4);
+    campfire(scene, cx, cz + 2, true);
+    sp.wuchao = [cx, cz - 3];
+  }
+  { // 長坂橋：橫跨江面的木橋（橋面可行走）
+    const s = S.changban, z = s.z, rx = s.x, x0 = rx - 30, x1 = rx + 30, y = 1.5, W = 4.4;
+    bridges.push({ x0, x1, z0: z - W / 2, z1: z + W / 2, y });
+    const p = [bx(x1 - x0, 0.3, W, 0x6a4a2a, 0, 0, 0)];
+    for (let i = 0; i <= 12; i++) { const px = -30 + i * 5; p.push(cyl(0.16, 0.18, 4, 6, 0x4a3420, px, -2, -W / 2 + 0.2), cyl(0.16, 0.18, 4, 6, 0x4a3420, px, -2, W / 2 - 0.2), cyl(0.06, 0.06, 1, 5, 0x5a3a20, px, 0.6, -W / 2 + 0.1), cyl(0.06, 0.06, 1, 5, 0x5a3a20, px, 0.6, W / 2 - 0.1)); }
+    p.push(bx(x1 - x0, 0.1, 0.1, 0x5a3a20, 0, 1.05, -W / 2 + 0.1), bx(x1 - x0, 0.1, 0.1, 0x5a3a20, 0, 1.05, W / 2 - 0.1));
+    addStatic(scene, p, rx, y - 0.15, z);
+    const hx = x1 + 6, hy = heightAt(hx, z + 6);
+    addStatic(scene, [bx(1.4, 2.2, 0.4, 0x8a8478, 0, 1.1, 0), bx(1.6, 0.2, 0.6, 0x6a6458, 0, 2.3, 0)], hx, hy, z + 6);
+    const pl = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.36), new THREE.MeshBasicMaterial({ map: plaque('長坂橋') })); pl.position.set(hx, hy + 1.6, z + 5.78); pl.rotation.y = PI; scene.add(pl);
+    sp.changbanHold = [x1 + 8, z]; sp.changbanWest = [x0 - 45, z]; sp.xiahouen = [x0 - 6, z];
+  }
+  { // 赤壁：曹軍江畔大營
+    const s = S.chibi, cx = s.x, cz = s.z;
+    for (const [dx, dz, ry] of [[10, -10, 0.8], [12, 8, -0.8], [-2, 14, 3], [16, 0, -1.5]]) tent(scene, cx + dx, cz + dz, 0x2a3f8a, 1.1, ry);
+    flag(scene, cx - 6, cz - 6, '曹', '#2a3f8a', '#f4e8b0', 10); flag(scene, cx - 6, cz + 6, '漢', '#8b1a1a', '#f4e8b0', 10);
+    campfire(scene, cx + 4, cz, true); tower(scene, cx + 18, cz - 16);
+    sp.caocaoE = [cx, cz];
+  }
+  { // 黑市：營帳、燈籠、貨箱
+    const s = S.blackmarket, cx = s.x, cz = s.z;
+    tent(scene, cx + 3, cz + 2, 0x2a2228, 1.1, 0.6);
+    const y = heightAt(cx - 2, cz - 1);
+    addStatic(scene, [bx(0.8, 0.8, 0.8, 0x5a4020, 0, 0.4, 0), bx(0.8, 0.8, 0.8, 0x4a3418, 0.9, 0.4, 0.2), bx(0.7, 0.7, 0.7, 0x5a4020, 0.4, 1.15, 0.1), cyl(0.05, 0.05, 2.4, 5, 0x3a2a1a, -0.9, 1.2, 0), ball(0.22, 0xd8402a, -0.9, 2.3, 0.25)], cx - 2, y, cz - 1);
+    world.addCircle(cx - 1.6, cz - 1, 1.2, 1);
+    sp.broker = [cx - 1, cz - 3];
+  }
+}
+// 赤壁戰船：第八章才出現，以鐵索相連
+export function buildShips() {
+  if (world.targets.some(t => t.kind === 'ship')) return;
+  const scene = G.scene, zs = [214, 226, 238, 250, 262];
+  for (const z of zs) {
+    const x = riverX(z);
+    const p = [bx(3.6, 1.6, 9.5, 0x5a3a1c, 0, 0.3, 0), bx(3.2, 0.2, 8.6, 0x7a5a32, 0, 1.15, 0), cone(1.8, 2.2, 4, 0x5a3a1c, 0, 0.3, 5.4, PI / 2, PI / 4), bx(2.4, 1.4, 2.4, 0x6a4a2a, 0, 1.9, -2.8)];
+    p.push(cyl(0.16, 0.2, 8, 6, 0x4a3420, 0, 5.1, 0.6), bx(0.08, 4.4, 3.4, 0xd8d0b8, 0.15, 5.6, 0.6), bx(0.1, 0.9, 1.2, 0x2a3f8a, 0.2, 8.6, 0.6));
+    if (z !== zs[zs.length - 1]) p.push(cyl(0.06, 0.06, 3, 4, 0x2a2a2e, 1.2, 0.9, 6.2, PI / 2), cyl(0.06, 0.06, 3, 4, 0x2a2a2e, -1.2, 0.9, 6.2, PI / 2));
+    const m = meshOf(p, true); m.position.set(x, WATER - 0.2, z); scene.add(m);
+    world.targets.push({ kind: 'ship', id: 'chibi', mesh: m, x, z, y: WATER, r: 5, hp: 100, max: 100, fy: 1.2, burned: false });
+  }
+}
+
 // ---- 軍火工坊：依建造等級重建模型 ----
 let wsGroup = null, wsSign = null;
 const wsCol = new Set();
@@ -613,6 +728,7 @@ function buildSites(scene) {
     for (const [dx, dz] of [[-24, -20], [24, -20], [-25, 4], [25, 4]]) tent(scene, cx + dx, cz + dz, 0x4a2a5a, 1, dx > 0 ? -1.5 : 1.5);
     sp.dongzhuo = [cx, cz + 3]; sp.meiwuGate = [cx, cz - R - 8];
   }
+  buildChapterSites(scene);
   { // 工坊預定地：互動點
     const s = S.workshop; world.addNode({ kind: 'workshop', x: s.x, z: s.z - 4, stock: 1 });
   }

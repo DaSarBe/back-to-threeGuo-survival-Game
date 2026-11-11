@@ -80,11 +80,11 @@
       <div class="kb-only"><h3>鍵盤滑鼠</h3>
         <p><kbd>W A S D</kbd> 移動　<kbd>Shift</kbd> 奔跑　<kbd>空白</kbd> 跳躍<br>
         <kbd>滑鼠左鍵</kbd> 攻擊　<kbd>右鍵</kbd> 瞄準　<kbd>R</kbd> 換彈<br>
-        <kbd>1–7</kbd>／<kbd>滾輪</kbd> 切換兵器　<kbd>G</kbd> 震天雷<br>
+        <kbd>數字鍵</kbd>／<kbd>滾輪</kbd> 切換兵器　<kbd>G</kbd> 震天雷<br>
         <kbd>E</kbd> 互動／採集／上下馬　<kbd>X</kbd> 吹哨喚馬<br>
         <kbd>V</kbd> 隊伍指令（跟隨／堅守／自由攻擊）<br>
         <kbd>F</kbd> 進食　<kbd>Z</kbd> 喝水　<kbd>H</kbd> 金瘡藥<br>
-        <kbd>T</kbd> 燃燒彈　<kbd>B</kbd> 埋地雷<br>
+        <kbd>T</kbd> 燃燒彈　<kbd>B</kbd> 埋地雷　<kbd>1–0</kbd> 依序切換兵器<br>
         <kbd>Tab</kbd> 背包／製作／訂單／地圖　<kbd>M</kbd> 配樂　<kbd>Esc</kbd> 暫停</p></div>
       <div class="touch-only"><h3>觸控操作</h3>
         <p>・<strong>左半螢幕</strong>拖曳移動，推到底即奔跑<br>
@@ -104,7 +104,8 @@
         ・接<strong>軍火訂單</strong>賺錢、提升聲望<br>
         ・在劉備營外蓋<strong>軍火工坊</strong>自動生產、改良槍械<br>
         ・向<strong>劉備、曹操、孫堅</strong>招兵買馬，名將隨戰功解鎖<br>
-        ・敵將有護體，須踏入<strong>決戰圈</strong>才傷得到</p></div>
+        ・敵將有護體，須踏入<strong>決戰圈</strong>才傷得到；可選<strong>單挑</strong>奪取專屬兵器<br>
+        ・西邊的<strong>黑市</strong>高價收軍火——但會流入敵軍</p></div>
     </div>
     <div class="btns">
       <button id="btn-continue" class="hidden">繼續遊戲</button>
@@ -162,8 +163,8 @@
 </div>
 
 <div id="menu-win" class="menu hidden">
-  <div class="panel wide"><h1>國賊伏誅</h1>
-    <p class="story">董卓已死，郿塢的火光映紅了半邊天。<br>史書不會記載一個來歷不明的「軍火商」，<br>但劉備、曹操、孫堅都記得——那個手持雷霆之器的異人。<br><br>天下三分的時代才正要開始，而你的生意，也才正要開始。</p>
+  <div class="panel wide"><h1 id="win-title">天下三分</h1>
+    <p class="story" id="win-story"></p>
     <div class="btns"><button data-close>繼續在亂世中求生</button></div></div>
 </div>
 

@@ -64,6 +64,25 @@ export function weaponParts(kind) {
       p.push(cyl(0.36, 0.36, 0.03, 10, 0xd4af37, 0, 0.08, 0));
       p.push(ball(0.07, 0xd4af37, 0, 0.14, 0));
       break;
+    case 'musket': // 火銃（敵軍仿造的火器）
+      p.push(bx(0.06, 0.5, 0.08, 0x5a3a1c, 0, -0.05, 0.02));
+      p.push(cyl(0.022, 0.022, 1.15, 6, 0x2a2a2e, 0, 0.75, 0.04));
+      p.push(bx(0.05, 0.1, 0.06, 0x3a3a40, 0, 0.2, 0.06));
+      break;
+    case 'qixing': case 'qinggang': case 'yitian': { // 寶劍：七星（金）、青釭（青）、倚天（白）
+      const blade = kind === 'qinggang' ? 0x8ad0e0 : kind === 'yitian' ? 0xf0f0f8 : 0xd8d8e0;
+      const guard = kind === 'qixing' ? GOLD : kind === 'qinggang' ? 0x2a6a7a : 0x8a8a9a;
+      p.push(bx(0.035, 0.24, 0.035, 0x2a1a10, 0, 0, 0), bx(0.05, 0.05, 0.05, guard, 0, -0.14, 0), bx(0.18, 0.035, 0.06, guard, 0, 0.13, 0));
+      p.push(bx(0.05, 0.98, 0.012, blade, 0, 0.63, 0), cone(0.035, 0.12, 4, blade, 0, 1.18, 0));
+      if (kind === 'qixing') for (let i = 0; i < 7; i++) p.push(bx(0.016, 0.016, 0.016, 0xffe060, 0, 0.25 + i * 0.12, 0.008));
+      break;
+    }
+    case 'tbow': {
+      const g = new THREE.TorusGeometry(0.66, 0.026, 4, 12, PI * 0.8);
+      g.rotateZ(-PI * 0.4); g.rotateY(-PI / 2);
+      p.push(colorize(g, 0x3a3a40, 0, 0, -0.52), bx(0.009, 1.24, 0.009, 0xddddcc, 0, 0, -0.33), bx(0.06, 0.16, 0.06, 0x8a1a1a, 0, 0, 0.12));
+      break;
+    }
     case 'staff': // 九節杖
       p.push(cyl(0.03, 0.03, 2.1, 6, 0x6a5a2a, 0, 0.4, 0));
       for (let i = 0; i < 4; i++) p.push(cyl(0.045, 0.045, 0.05, 6, GOLD, 0, 0.9 + i * 0.16, 0));

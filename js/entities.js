@@ -5,6 +5,8 @@ import { humanoid, quadruped } from './models.js';
 import { world, heightAt, WATER } from './world.js';
 import { audio } from './audio.js';
 import { clamp, lerp, rnd, rndInt, pick, dist2, angDiff, turnTo, raySphere, makeLabel } from './util.js';
+import { damageTargets } from './world.js';
+import { raining } from './weather.js';
 
 const PI = Math.PI;
 const V = new THREE.Vector3(), V2 = new THREE.Vector3();
@@ -21,15 +23,15 @@ export class Actor {
     this.pos = new THREE.Vector3(x, heightAt(x, z), z);
     this.home = { x, z }; this.yaw = o.yaw ?? rnd(PI * 2);
     this.scale = d.scale || 1; this.roam = !!o.roam; this.group = o.group || null;
-    const m = this.m = humanoid(d.look, d.weapon, d.weapon2, this.scale);
+    const m = this.m = humanoid(o.look || d.look, d.weapon, d.weapon2, this.scale);
     this.seat = 0;
     if (d.mounted) {
       this.horse = quadruped({ kind: 'horse', color: d.horseColor || 0x4a3020, dark: 0x111111, saddle: true, blanket: 0x26262c });
       m.root.add(this.horse.root); this.seat = 0.86; m.inner.position.y = this.seat;
       m.legL.rotation.set(-1.0, 0, -0.5); m.legR.rotation.set(-1.0, 0, 0.5);
     }
-    if (d.general || d.boss || o.recruited) {
-      const l = makeLabel(o.recruited ? d.short : d.name, d.boss ? '#ff6a5a' : o.recruited ? '#bfe4ff' : '#9af0a0');
+    if (d.general || d.boss || o.recruited || d.talk) {
+      const l = makeLabel(o.recruited ? d.short : d.name, d.boss ? '#ff6a5a' : o.recruited ? '#bfe4ff' : d.talk ? '#d0a0ff' : '#9af0a0');
       if (o.recruited) { l.material.sizeAttenuation = false; l.scale.set(0.26, 0.065, 1); } // 固定螢幕大小，靠近時不會變巨大
       l.position.y = 2.2 * this.scale + this.seat + 0.25; m.root.add(l);
     }
@@ -74,12 +76,15 @@ export class Actor {
     }
     // 呼叫附近同伴
     if (this.faction === 'enemy') for (const a of G.actors) if (a.alive && a.faction === 'enemy' && a !== this && d2(a.pos, this.pos) < 30) { a.alert = Math.max(a.alert, 10); if (!a.target && src) a.target = src; }
+    if (this.def.flee && this.hp <= this.maxHp * this.def.flee) { this.die(src, true); return true; } // 曹操：重傷即敗走
     if (this.hp <= 0) this.die(src);
     return true;
   }
+  // 是否正在與玩家單挑
+  get dueling() { return G.battle && G.battle.mode === 'duel' && G.battle.boss === this; }
 
-  die(src) {
-    const d = this.def;
+  die(src, fled = false) {
+    const d = this.def, duel = this.dueling;
     if (d.general && this.faction === 'ally') { // 名將不死，負傷回營
       this.hp = this.maxHp * 0.5; this.follow = false; this.target = null;
       this.pos.set(this.home.x, heightAt(this.home.x, this.home.z), this.home.z);
@@ -92,11 +97,23 @@ export class Actor {
     if (this.faction === 'enemy') {
       const dr = d.drop;
       if (dr) {
-        if (dr.coin) dropItem(this.pos, 'coin', rndInt(dr.coin[0], dr.coin[1]));
+        if (dr.coin) dropItem(this.pos, 'coin', rndInt(dr.coin[0], dr.coin[1]) * (duel ? 2 : 1)); // 單挑勝利賞金加倍
         for (const [it, ch, n] of dr.items || []) if (Math.random() < ch) dropItem(this.pos, it, n || 1);
         if (dr.weapon && Math.random() < dr.weapon[1] && !G.player.owned[dr.weapon[0]]) dropItem(this.pos, 'w:' + dr.weapon[0], 1);
       }
+      // 武將專屬兵器：單挑必得，群戰 25%
+      if (d.excl) {
+        const isW = d.excl.startsWith('w:'), owned = isW ? G.player.owned[d.excl.slice(2)] : G.player.count(d.excl) > 0;
+        if (!owned && (duel || Math.random() < 0.25)) dropItem(this.pos, d.excl, 1);
+        else if (!owned && !duel) G.ui.msg(`（${d.name}的專屬兵器沒有落下——單挑擊敗必定能奪得。）`, 'info');
+      }
+      if (duel) G.ui.msg(`⚔ 單挑勝利！你一對一擊敗了${d.name}，賞金加倍！`, 'quest');
       if (d.boss) G.killed[this.id] = true;
+      if (fled) {
+        G.ui.msg(`${d.name}：「……撤！快撤！」曹操在親兵掩護下敗走了！`, 'quest');
+        V.set(this.pos.x, this.pos.y + 1, this.pos.z); fxBurst(V, 0x8a7a5a, 30, 6, 1.2, 0.35);
+        G.scene.remove(this.m.root); this.gone = true;
+      }
       if (G.onKill) G.onKill(this, src);
     }
   }
@@ -105,12 +122,17 @@ export class Actor {
     const P = G.player; let best = null, bd = 1e9;
     if (this.faction === 'enemy') {
       const see = this.alert > 0 ? 110 : (world.isNight ? 28 : 40) * (this.def.boss ? 1.3 : 1) * (1 - (G.fogF || 0) * 0.4 - (G.weatherF > 0.6 ? 0.15 : 0)); // 霧和雨會縮短敵人視野
+      const B = G.battle && G.battle.mode === 'duel' ? G.battle.boss : null;
+      if (B && this !== B && B.arena && d2(this.pos, B.home) < B.arena.R + 15) return null; // 單挑時，敵方士卒在旁觀戰
+      if (B === this) return P.alive && this.inArena(P) ? P : null;                          // 單挑時，敵將只對付玩家
       const ok = o => !this.arena || this.inArena(o); // 敵將只追擊決戰圈內的對手
       if (P.alive && ok(P)) { const d = d2(this.pos, P.pos); if (d < see) { best = P; bd = d * 0.8; } }
       for (const a of G.actors) if (a.alive && a.faction === 'ally' && !a.def.noncombat && ok(a)) { const d = d2(this.pos, a.pos); if (d < 32 && d < bd) { best = a; bd = d; } }
     } else {
       const [anchor, range] = this.leash();
+      const B = G.battle && G.battle.mode === 'duel' ? G.battle.boss : null;
       for (const a of G.actors) if (a.alive && a.faction === 'enemy') {
+        if (B && B.arena && d2(a.pos, B.home) < B.arena.R + 2) continue; // 單挑時友軍不插手
         const d = d2(this.pos, a.pos);
         if (d < bd && (this.follow ? d2(anchor, a.pos) < range : d < 30)) { best = a; bd = d; }
       }
@@ -150,6 +172,12 @@ export class Actor {
       const t = this.target;
       if (t && (t.alive === false || d2(this.pos, t.pos) > (this.alert > 0 ? 130 : 75))) this.target = null;
       if (this.target && this.arena && !this.inArena(this.target)) this.target = null;
+      if (this.target && G.battle && G.battle.mode === 'duel') {
+        const B = G.battle.boss;
+        if (this.faction === 'ally' && B.arena && d2(this.target.pos, B.home) < B.arena.R + 2) this.target = null;
+        if (this.faction === 'enemy' && this !== B && B.arena && d2(this.pos, B.home) < B.arena.R + 15) this.target = null;
+        if (this === B && this.target !== P) this.target = null;
+      }
       if (this.target && this.follow) { const [an, , drop] = this.leash(); if (d2(an, this.target.pos) > drop) this.target = null; }
       if (!this.target || this.target !== P || this.faction === 'ally') { const nt = this.findTarget(); if (nt) this.target = nt; }
       if (!this.roam && !this.follow && this.target && dist2(this.pos.x, this.pos.z, this.home.x, this.home.z) > (this.faction === 'ally' ? 45 : 150)) { this.target = null; this.alert = 0; }
@@ -178,7 +206,15 @@ export class Actor {
         this.wind -= dt;
         if (this.wind <= 0) {
           this.atkT = d.cd * (0.85 + rnd(0.3));
-          if (d.ranged) {
+          if (d.gun) { // 火銃：直線彈道、傷害高；下雨常常啞火
+            V.set(this.pos.x, this.pos.y + 1.45, this.pos.z);
+            if (raining() && Math.random() < 0.4) { audio.playAt('click', dp, 0.8); fxBurst(V, 0x8a8a8a, 8, 1.5, 0.8, 0.2); }
+            else {
+              const ty = tg.pos.y + (tg === P ? P.eyeH * 0.8 : 1.2), L = Math.hypot(dx, ty - V.y, dz) || 1, sp = 140, e = 0.035;
+              V2.set(dx / L + rnd(-e, e), (ty - V.y) / L + rnd(-e, e) * 0.6, dz / L + rnd(-e, e)).normalize().multiplyScalar(sp);
+              spawnArrow(V, V2, this, d.dmg, 'bullet'); audio.playAt('rifle', dp, 0.9); fxBurst(V, 0xffc060, 6, 2, 0.15, 0.15);
+            }
+          } else if (d.ranged) {
             V.set(this.pos.x, this.pos.y + 1.5 * this.scale, this.pos.z);
             const ty = tg.pos.y + (tg === P ? P.eyeH * 0.75 : 1.1);
             const sp = 40, t = dist / sp, g = 9;
@@ -201,11 +237,23 @@ export class Actor {
         } else if (d.special === 'charge' && dist > 9 && dist < 34) {
           this.specialT = 5.5; this.charge = 0.95; this.chargeHit = false; this.chargeDir = { x: dx / dist, z: dz / dist };
           audio.playAt('neigh', dp, 0.7);
+        } else if (d.special === 'volley' && dist > 8 && dist < 40) { // 文醜：連珠箭
+          this.specialT = 6;
+          G.ui.msg(`${d.name}張弓連射！`, 'warn');
+          for (let i = 0; i < 5; i++) {
+            V.set(this.pos.x, this.pos.y + 1.6 * this.scale, this.pos.z);
+            const ty = tg.pos.y + 1.2, sp = 42, t = dist / sp, off = (i - 2) * 0.09, c = Math.cos(off), sn = Math.sin(off);
+            const vx = dx / t, vz = dz / t;
+            V2.set(vx * c - vz * sn, (ty - V.y) / t + 4.5 * t, vx * sn + vz * c);
+            spawnArrow(V, V2, this, d.dmg * 0.5);
+          }
+          audio.playAt('bow', dp, 1);
         } else if (d.special === 'summon') {
           const step = this.hp < this.maxHp * 0.3 ? 2 : this.hp < this.maxHp * 0.65 ? 1 : 0;
-          if (step > this.summoned) {
-            this.summoned = step; G.ui.msg('董卓：「來人！護駕！給我殺了這妖人！」', 'warn'); audio.play('horn', 0.7);
-            for (let i = 0; i < 4; i++) { const a = new Actor(pick(['xl_blade', 'xl_spear', 'xl_blade', 'xl_archer']), this.pos.x + rnd(-9, 9), this.pos.z + rnd(-9, 9), { roam: true }); a.alert = 20; a.target = tg; }
+          if (step > this.summoned && this.dueling) { this.summoned = step; G.ui.msg(`${d.name}按住了想上前護駕的親兵——單挑就是單挑。`, 'info'); }
+          else if (step > this.summoned) {
+            this.summoned = step; G.ui.msg(d.summon.line, 'warn'); audio.play('horn', 0.7);
+            for (let i = 0; i < 4; i++) { const a = new Actor(pick(d.summon.units), this.pos.x + rnd(-9, 9), this.pos.z + rnd(-9, 9), { roam: true }); a.alert = 20; a.target = tg; }
           }
           this.specialT = 1;
         }
@@ -261,6 +309,10 @@ export class Actor {
       } else this.stuckT = Math.max(0, this.stuckT - dt);
     }
     if (this.follow && G.squadCmd !== 'hold' && !tg && dp > 24) { this.farT += dt; if (this.farT > 9) { this.farT = 0; this.pos.set(P.pos.x - Math.sin(P.yaw + PI) * -4 + rnd(-2, 2), 0, P.pos.z - Math.cos(P.yaw + PI) * -4 + rnd(-2, 2)); } } else this.farT = 0;
+    if (G.battle && G.battle.mode === 'duel' && this.faction === 'ally' && G.battle.boss.arena) { // 單挑：友軍退到圈外
+      const B = G.battle.boss, ax = this.pos.x - B.home.x, az = this.pos.z - B.home.z, ad = Math.hypot(ax, az) || 1, R = B.arena.R + 1.5;
+      if (ad < R) { this.pos.x = B.home.x + ax / ad * R; this.pos.z = B.home.z + az / ad * R; }
+    }
     if (this.arena) {
       const ax = this.pos.x - this.home.x, az = this.pos.z - this.home.z, ad = Math.hypot(ax, az), R = this.arena.R - 1.5;
       if (ad > R) { this.pos.x = this.home.x + ax / ad * R; this.pos.z = this.home.z + az / ad * R; }
@@ -544,9 +596,10 @@ export class Animal {
 // =====================================================================
 const arrowGeo = new THREE.BoxGeometry(0.035, 0.035, 0.95), arrowMat = new THREE.MeshBasicMaterial({ color: 0x4a3a20 });
 const grenGeo = new THREE.IcosahedronGeometry(0.11, 0), grenMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
-export function spawnArrow(pos, vel, owner, dmg) {
-  const mesh = new THREE.Mesh(arrowGeo, arrowMat); mesh.position.copy(pos); G.scene.add(mesh);
-  G.projectiles.push({ type: 'arrow', pos: pos.clone(), vel: vel.clone(), owner, dmg, life: 5, mesh });
+const bulletGeo = new THREE.BoxGeometry(0.05, 0.05, 1.4), bulletMat = new THREE.MeshBasicMaterial({ color: 0xffe0a0, fog: false });
+export function spawnArrow(pos, vel, owner, dmg, type = 'arrow') {
+  const mesh = new THREE.Mesh(type === 'bullet' ? bulletGeo : arrowGeo, type === 'bullet' ? bulletMat : arrowMat); mesh.position.copy(pos); G.scene.add(mesh);
+  G.projectiles.push({ type, pos: pos.clone(), vel: vel.clone(), owner, dmg, life: type === 'bullet' ? 2 : 5, mesh });
 }
 const fireMat = new THREE.MeshLambertMaterial({ color: 0x8a3a1a });
 export function spawnGrenade(pos, vel, dud = false, kind = 'boom') {
@@ -554,17 +607,25 @@ export function spawnGrenade(pos, vel, dud = false, kind = 'boom') {
   // 燃燒彈落地就碎、起火；震天雷依引信時間爆炸
   G.projectiles.push({ type: 'grenade', pos: pos.clone(), vel: vel.clone(), life: kind === 'fire' ? 4 : 2.3, mesh, dud, kind });
 }
-function hitsBody(p, t, r, top) { return Math.hypot(p.x - t.pos.x, p.z - t.pos.z) < r && p.y > t.pos.y - 0.1 && p.y < t.pos.y + top; }
+// 掃掠碰撞：檢查這一幀飛過的整段路徑，快速的子彈才不會穿過目標
+const P0 = new THREE.Vector3();
+function hitsBody(p, t, r, top) {
+  const ax = P0.x, ay = P0.y, az = P0.z, dx = p.x - ax, dy = p.y - ay, dz = p.z - az, L2 = dx * dx + dz * dz;
+  const k = L2 > 1e-6 ? clamp(((t.pos.x - ax) * dx + (t.pos.z - az) * dz) / L2, 0, 1) : 1;
+  const x = ax + dx * k, y = ay + dy * k, z = az + dz * k;
+  if (Math.hypot(x - t.pos.x, z - t.pos.z) >= r || y <= t.pos.y - 0.1 || y >= t.pos.y + top) return false;
+  p.set(x, y, z); return true;
+}
 export function updateProjectiles(dt) {
   const P = G.player;
   for (const p of G.projectiles) {
     p.life -= dt;
-    if (p.type === 'arrow') {
-      p.vel.y -= 9 * dt;
+    if (p.type === 'arrow' || p.type === 'bullet') {
+      if (p.type === 'arrow') p.vel.y -= 9 * dt;
       const sp = p.vel.length(), step = sp * dt;
       V.copy(p.vel).multiplyScalar(1 / sp);
       let dead = p.life <= 0 || world.rayBlock(p.pos, V, step + 0.6) < step + 0.6;
-      p.pos.addScaledVector(p.vel, dt);
+      P0.copy(p.pos); p.pos.addScaledVector(p.vel, dt);
       const fromPlayer = p.owner === P, enemyShot = !fromPlayer && p.owner.faction === 'enemy';
       if (!dead) {
         if (enemyShot && P.alive && hitsBody(p.pos, P, P.mount ? 0.9 : 0.5, P.eyeH + 0.2)) { P.damage(p.dmg, p.owner); dead = true; }
@@ -602,6 +663,7 @@ export function updateProjectiles(dt) {
 
 export function explode(pos, radius, dmg, byPlayer) {
   const P = G.player, dp = pos.distanceTo(P.pos);
+  damageTargets(pos.x, pos.z, radius, 60);
   for (const a of G.actors) {
     if (!a.alive || (byPlayer && a.faction === 'ally')) continue;
     const d = a.pos.distanceTo(pos); if (d < radius) a.damage(dmg * Math.pow(1 - d / radius, 0.6), byPlayer ? P : null);
@@ -639,6 +701,7 @@ export function fireZone(at) {
         for (const a of G.actors) if (a.alive && a.faction === 'enemy' && Math.hypot(a.pos.x - x, a.pos.z - z) < R) a.damage(10, P);
         for (const a of G.animals) if (a.alive && a.kind !== 'horse' && Math.hypot(a.pos.x - x, a.pos.z - z) < R) a.damage(10, P);
         if (P.alive && Math.hypot(P.pos.x - x, P.pos.z - z) < R) P.damage(4, null);
+        damageTargets(x, z, R, 8);
         if (Math.random() < 0.5) fxBurst(V.set(x + rnd(-R, R) * 0.6, heightAt(x, z) + 0.5, z + rnd(-R, R) * 0.6), 0x4a3a30, 5, 2, 1.2, 0.3);
       }
       if (t >= dur) { G.scene.remove(grp); mat.dispose(); return false; }
@@ -690,8 +753,11 @@ export function spawnLightning(at, owner) {
         bolt = new THREE.Mesh(boltGeo, new THREE.MeshBasicMaterial({ color: 0xfff8c0, fog: false })); bolt.position.set(x, y, z); G.scene.add(bolt);
         const P = G.player; V.set(x, y, z);
         audio.playAt('thunder', d2(V, P.pos) * 0.4, 1); fxFlash(V, 0xfff0a0, 1500, 0.3); fxBurst(V, 0xffe060, 20, 8, 0.5, 0.25);
-        if (P.alive && d2(V, P.pos) < 3.6 && Math.abs(P.pos.y - y) < 4) P.damage(32, owner);
-        for (const a of G.actors) if (a.alive && a.faction === 'ally' && d2(a.pos, V) < 3.6) a.damage(60, owner);
+        if (owner === P) { for (const a of G.actors) if (a.alive && a.faction === 'enemy' && d2(a.pos, V) < 3.6) a.damage(55, P); } // 九節杖引雷
+        else {
+          if (P.alive && d2(V, P.pos) < 3.6 && Math.abs(P.pos.y - y) < 4) P.damage(32, owner);
+          for (const a of G.actors) if (a.alive && a.faction === 'ally' && d2(a.pos, V) < 3.6) a.damage(60, owner);
+        }
       }
       if (t > 1.4) { G.scene.remove(ring); G.scene.remove(bolt); ring.material.dispose(); return false; }
       return true;

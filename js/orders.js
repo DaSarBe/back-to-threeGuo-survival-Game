@@ -35,6 +35,7 @@ export const orderText = o => `${fmt(o)}　🪙${o.reward}・第 ${o.due} 日前
 
 export function offerFor(id) {
   if (!ISSUERS[id] || G.stage < ISSUERS[id].stage) return null;
+  if (id === 'caocao' && G.flags.caoHostile) return null; // 長坂坡之後曹操成了敵人
   let f = OR.offers[id];
   if (!f || f.day !== G.day) {
     const [item, a, b] = pick(POOL[id]), qty = rndInt(a, b);

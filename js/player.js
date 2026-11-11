@@ -4,7 +4,7 @@ import { ITEMS, WEAPONS, HOTBAR, UPGRADES } from './data.js';
 import { world, heightAt, WATER, HALF, SITES } from './world.js';
 import { viewModel } from './models.js';
 import { audio } from './audio.js';
-import { spawnArrow, spawnGrenade, placeMine, alertEnemies, fxTracer, fxBurst } from './entities.js';
+import { spawnArrow, spawnGrenade, placeMine, alertEnemies, fxTracer, fxBurst, spawnLightning } from './entities.js';
 import { clamp, lerp, rnd, turnTo, dist2 } from './util.js';
 import { misfireChance, dudChance } from './weather.js';
 
@@ -26,12 +26,14 @@ export const player = {
   give(it, n = 1, announce = false) {
     this.inv[it] = (this.inv[it] || 0) + n;
     if (announce) G.ui.msg(`獲得 ${ITEMS[it].i} ${ITEMS[it].n} ×${n}`, 'get');
+    if (ITEMS[it].armor && ITEMS[it].armor > this.armor) { this.armor = ITEMS[it].armor; G.ui.msg(`穿上了${ITEMS[it].n}（減傷 ${Math.round(this.armor * 100)}%）`, 'quest'); }
     G.ui.dirty = true;
   },
   take(it, n = 1) { if ((this.inv[it] || 0) < n) return false; this.inv[it] -= n; G.ui.dirty = true; return true; },
   giveWeapon(id) {
     if (this.owned[id]) return;
-    this.owned[id] = true; G.ui.msg(`獲得兵器：${WEAPONS[id].i} ${WEAPONS[id].n}（${G.touch ? '點下方兵器列' : '按 ' + (HOTBAR.indexOf(id) + 1) + ' '}切換）`, 'quest'); G.ui.dirty = true;
+    this.owned[id] = true; const k = HOTBAR.filter(w => this.owned[w]).indexOf(id) + 1;
+    G.ui.msg(`獲得兵器：${WEAPONS[id].i} ${WEAPONS[id].n}（${G.touch ? '點下方兵器列' : k <= 10 ? '按 ' + (k % 10) + ' ' : '滾輪'}切換）`, 'quest'); G.ui.dirty = true;
   },
   equip(id) {
     if (!this.owned[id] || this.cur === id) return;
@@ -196,6 +198,7 @@ export const player = {
       if (d > 0.8 && (dx * D.x + dz * D.z) / d < 0.45) return;
       if (a.damage(w.dmg * (0.9 + rnd(0.25)) * (this.mount && this.mount.speed > 8 ? 1.5 : 1), this) === false) return;
       n++; V.set(a.pos.x, a.pos.y + 1.2, a.pos.z); fxBurst(V, 0x9a0a0a, 6, 3, 0.4, 0.12);
+      if (w.lightning && a.faction === 'enemy' && Math.random() < w.lightning) spawnLightning(a.pos, this); // 九節杖：引天雷
     };
     for (const a of G.actors) if (a.alive && a.faction === 'enemy' && n < 3) test(a);
     for (const a of G.animals) if (a.alive && a.kind !== 'horse' && n < 3) test(a);
@@ -218,7 +221,7 @@ function findInteract() {
     if (dot < 0.25) return;
     const s = d + (1 - dot) * 3; if (s < bs) { bs = s; best = { label, act }; }
   };
-  for (const a of G.actors) if (a.alive && a.def.general && a.faction === 'ally') consider(a.pos.x, a.pos.z, 3.6, `與 ${a.name} 交談`, () => G.ui.talk(a));
+  for (const a of G.actors) if (a.alive && ((a.def.general && a.faction === 'ally') || a.def.talk)) consider(a.pos.x, a.pos.z, 3.6, `與 ${a.name} 交談`, () => G.ui.talk(a));
   for (const a of G.attendants) consider(a.pos.x, a.pos.z, 3.2, `與侍從 ${a.name} 交談` + (a.carried ? `（帶著 ${a.carried} 件）` : ''), () => G.ui.talk(a));
   for (const h of G.animals) if (h.kind === 'horse' && h.alive) consider(h.pos.x, h.pos.z, 3.4, h.tamed ? `騎乘 ${h.name}` : `馴服並騎乘 ${h.name}`, () => P.mountHorse(h));
   world.nodes.query(P.pos.x, P.pos.z, 7, n => {
@@ -360,8 +363,8 @@ function updateViewModel(dt, w) {
     G.ui.scope(false);
     const s = P.swingT > 0 ? 1 - P.swingT / 0.32 : 0, k = Math.sin(s * PI);
     if (P.swingT > 0) P.swingT -= dt;
-    if (P.cur === 'bow') { m.position.set(0.26 - k * 0.1, -0.2, -0.6 + k * 0.1); m.rotation.set(0, PI, 0.12); }
-    else if (P.cur === 'dao') { m.position.set(0.36 - k * 0.4 + sway, -0.42 + k * 0.1, -0.55); m.rotation.set(-0.4 - k * 1.3, 0.2, -0.25 + k * 1.0); }
+    if (w.type === 'bow') { m.position.set(0.26 - k * 0.1, -0.2, -0.6 + k * 0.1); m.rotation.set(0, PI, 0.12); }
+    else if (['dao', 'qixing', 'qinggang', 'yitian'].includes(P.cur)) { m.position.set(0.36 - k * 0.4 + sway, -0.42 + k * 0.1, -0.55); m.rotation.set(-0.4 - k * 1.3, 0.2, -0.25 + k * 1.0); }
     else { m.position.set(0.32 + sway, -0.5, -0.1 - k * 0.9); m.rotation.set(-1.32 - k * 0.12, 0.08, -0.05); }
   }
   flashT -= dt; muzzle.light.intensity = flashT > 0 ? 60 : 0;
@@ -405,7 +408,7 @@ export function initInput(canvas) {
     }
     if (e.repeat) return;
     keys[e.code] = true;
-    if (e.code.startsWith('Digit')) { const i = +e.code.slice(5) - 1; if (HOTBAR[i]) { if (P.owned[HOTBAR[i]]) P.equip(HOTBAR[i]); else G.ui.msg(`尚未取得 ${WEAPONS[HOTBAR[i]].n}。`, 'info'); } }
+    if (e.code.startsWith('Digit')) { const d = +e.code.slice(5), own = HOTBAR.filter(w => P.owned[w]), id = own[(d + 9) % 10]; if (id) P.equip(id); } // 數字鍵依序對應已擁有的兵器
     else act({ KeyE: 'interact', Space: 'jump', KeyR: 'reload', KeyG: 'grenade', KeyT: 'firebomb', KeyB: 'mine', KeyF: 'eat', KeyH: 'heal', KeyZ: 'drink', KeyX: 'whistle', Tab: 'menu', KeyC: 'menu', KeyI: 'menu', KeyM: 'music', KeyV: 'command', Escape: 'pause', KeyP: 'pause' }[e.code]);
   });
   document.addEventListener('keyup', e => { keys[e.code] = false; });
