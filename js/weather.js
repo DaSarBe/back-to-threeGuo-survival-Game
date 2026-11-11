@@ -47,6 +47,7 @@ function announce(prev, k) {
 export function nearFire(p, r = 7) { return world.fires.some(f => dist2(f.flame.position.x, f.flame.position.z, p.x, p.z) < r); }
 export function sheltered(p) {
   for (const id of ['camp', 'coalition']) { const s = SITES[id]; if (dist2(p.x, p.z, s.x, s.z) < s.r) return true; }
+  if (G.ws && G.ws.built && dist2(p.x, p.z, SITES.workshop.x, SITES.workshop.z) < 9) return true; // 工坊棚下
   return nearFire(p);
 }
 export const raining = () => W.kind === 'rain' && G.weatherF > 0.5;

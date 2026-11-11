@@ -333,7 +333,7 @@ export class Attendant {
     this.id = 'attendant'; this.spec = spec; this.name = d.name; this.faction = 'ally';
     this.def = { title: `${d.role}・${d.desc}`, noncombat: true };
     this.pos = new THREE.Vector3(x, heightAt(x, z), z); this.yaw = 0;
-    this.inv = o.inv || {}; this.focus = o.focus || null; this.wait = !!o.wait; this.cap = 10;
+    this.inv = o.inv || {}; this.focus = o.focus || null; this.wait = !!o.wait; this.ws = !!o.ws; this.cap = 10;
     this.state = 'idle'; this.node = null; this.t = o.first ? 12 : rnd(20, 35); this.walkPh = 0; this.curSpeed = 0;
     this.stuckT = 0; this.wp = [0, 0]; this.wpT = 0; this.alive = true;
     this.waitPos = o.waitPos || { x, z };
@@ -408,7 +408,8 @@ export class Attendant {
       if (Math.floor(this.workT * 2.5) !== Math.floor((this.workT + dt) * 2.5)) audio.playAt('chop', dp, 0.5);
       if (this.workT <= 0) {
         const r = this.harvest(this.node); this.node = null; this.state = 'idle';
-        if (r) { this.fullMsg = false; G.ui.msg(`${this.name} 採到 ${ITEMS[r[0]].i}${ITEMS[r[0]].n} ×${r[1]}（身上 ${this.carried}/${this.cap}，找他交談可領取）`, 'get'); }
+        if (r && this.ws && G.wsDeposit) { G.wsDeposit(this); this.fullMsg = false; } // 派駐工坊：直接存進工坊倉庫
+        else if (r) { this.fullMsg = false; G.ui.msg(`${this.name} 採到 ${ITEMS[r[0]].i}${ITEMS[r[0]].n} ×${r[1]}（身上 ${this.carried}/${this.cap}，找他交談可領取）`, 'get'); }
       }
     }
     if (goal && speed > 0) {
@@ -426,6 +427,7 @@ export class Attendant {
     // 不要擋住玩家
     const px = this.pos.x - P.pos.x, pz = this.pos.z - P.pos.z, pd = Math.hypot(px, pz);
     if (pd < 1 && pd > 1e-3) { this.pos.x = P.pos.x + px / pd; this.pos.z = P.pos.z + pz / pd; }
+    if (this.ws) { m.root.visible = dp < 240; }
     this.curSpeed = lerp(this.curSpeed, goal ? speed : 0, Math.min(1, dt * 8));
     this.pos.y = Math.max(heightAt(this.pos.x, this.pos.z), WATER - 1.1);
     if (face !== null) this.yaw = turnTo(this.yaw, face, dt * 7);
@@ -546,9 +548,11 @@ export function spawnArrow(pos, vel, owner, dmg) {
   const mesh = new THREE.Mesh(arrowGeo, arrowMat); mesh.position.copy(pos); G.scene.add(mesh);
   G.projectiles.push({ type: 'arrow', pos: pos.clone(), vel: vel.clone(), owner, dmg, life: 5, mesh });
 }
-export function spawnGrenade(pos, vel, dud = false) {
-  const mesh = new THREE.Mesh(grenGeo, grenMat); mesh.position.copy(pos); G.scene.add(mesh);
-  G.projectiles.push({ type: 'grenade', pos: pos.clone(), vel: vel.clone(), life: 2.3, mesh, dud });
+const fireMat = new THREE.MeshLambertMaterial({ color: 0x8a3a1a });
+export function spawnGrenade(pos, vel, dud = false, kind = 'boom') {
+  const mesh = new THREE.Mesh(grenGeo, kind === 'fire' ? fireMat : grenMat); mesh.position.copy(pos); G.scene.add(mesh);
+  // 燃燒彈落地就碎、起火；震天雷依引信時間爆炸
+  G.projectiles.push({ type: 'grenade', pos: pos.clone(), vel: vel.clone(), life: kind === 'fire' ? 4 : 2.3, mesh, dud, kind });
 }
 function hitsBody(p, t, r, top) { return Math.hypot(p.x - t.pos.x, p.z - t.pos.z) < r && p.y > t.pos.y - 0.1 && p.y < t.pos.y + top; }
 export function updateProjectiles(dt) {
@@ -580,13 +584,14 @@ export function updateProjectiles(dt) {
     } else {
       p.vel.y -= 18 * dt; p.pos.addScaledVector(p.vel, dt);
       const gy = heightAt(p.pos.x, p.pos.z) + 0.1;
-      if (p.pos.y < gy) { p.pos.y = gy; p.vel.y *= -0.35; p.vel.x *= 0.55; p.vel.z *= 0.55; }
+      if (p.pos.y < gy) { p.pos.y = gy; p.vel.y *= -0.35; p.vel.x *= 0.55; p.vel.z *= 0.55; if (p.kind === 'fire') p.life = 0; }
       const bx = p.pos.x, bz = p.pos.z; world.resolve(p.pos, 0.15);
       if (bx !== p.pos.x || bz !== p.pos.z) { p.vel.x *= -0.3; p.vel.z *= -0.3; }
       p.mesh.position.copy(p.pos); p.mesh.rotation.x += dt * 9;
       if (p.life <= 0) {
         p.gone = true;
-        if (p.dud) { fxBurst(p.pos, 0x8a8a8a, 18, 2.5, 1.2, 0.3); audio.playAt('swing', d2(p.pos, G.player.pos), 0.6); G.ui.msg('💨 震天雷受潮，只冒了陣煙沒炸開……', 'warn'); }
+        if (p.dud) { fxBurst(p.pos, 0x8a8a8a, 18, 2.5, 1.2, 0.3); audio.playAt('swing', d2(p.pos, G.player.pos), 0.6); G.ui.msg(p.kind === 'fire' ? '💨 燃燒彈受潮，沒燒起來……' : '💨 震天雷受潮，只冒了陣煙沒炸開……', 'warn'); }
+        else if (p.kind === 'fire') fireZone(p.pos);
         else explode(p.pos, 8.5, 230, true);
       }
     }
@@ -609,6 +614,61 @@ export function explode(pos, radius, dmg, byPlayer) {
   fxBurst(pos, 0xffb040, 40, 12, 0.9, 0.3); fxBurst(pos, 0x3a3028, 30, 7, 1.3, 0.35);
   if (dp < 30) P.shake = Math.max(P.shake, 0.5 * (1 - dp / 30));
 }
+// 燃燒彈：地面起火，持續灼燒範圍內的敵人（雨天燒得短）
+const flameGeo = new THREE.ConeGeometry(0.45, 1.4, 5);
+export function fireZone(at) {
+  const R = 5, x = at.x, z = at.z, wet = G.weatherF > 0.6, dur = wet ? 3.5 : 7;
+  const grp = new THREE.Group(), mat = new THREE.MeshBasicMaterial({ color: 0xff8a20, transparent: true, opacity: 0.85, fog: false, depthWrite: false });
+  const fl = [];
+  for (let i = 0; i < 14; i++) {
+    const a = rnd(PI * 2), r = Math.sqrt(Math.random()) * R * 0.9, fx = x + Math.cos(a) * r, fz = z + Math.sin(a) * r;
+    const m = new THREE.Mesh(flameGeo, mat); m.position.set(fx, heightAt(fx, fz) + 0.6, fz); m.userData.ph = rnd(6); grp.add(m); fl.push(m);
+  }
+  G.scene.add(grp); V.set(x, heightAt(x, z), z);
+  audio.playAt('explosion', d2(V, G.player.pos), 0.5); fxFlash(V, 0xff7a20, 600, 0.6);
+  alertEnemies(V, 60);
+  let t = 0, tick = 0;
+  G.effects.push({
+    update(dt) {
+      t += dt; tick -= dt;
+      const k = t < dur - 1 ? 1 : Math.max(0, dur - t);
+      for (const m of fl) m.scale.set(k, k * (0.8 + 0.35 * Math.sin(G.now * 12 + m.userData.ph)), k);
+      if (tick <= 0) {
+        tick = 0.5;
+        const P = G.player;
+        for (const a of G.actors) if (a.alive && a.faction === 'enemy' && Math.hypot(a.pos.x - x, a.pos.z - z) < R) a.damage(10, P);
+        for (const a of G.animals) if (a.alive && a.kind !== 'horse' && Math.hypot(a.pos.x - x, a.pos.z - z) < R) a.damage(10, P);
+        if (P.alive && Math.hypot(P.pos.x - x, P.pos.z - z) < R) P.damage(4, null);
+        if (Math.random() < 0.5) fxBurst(V.set(x + rnd(-R, R) * 0.6, heightAt(x, z) + 0.5, z + rnd(-R, R) * 0.6), 0x4a3a30, 5, 2, 1.2, 0.3);
+      }
+      if (t >= dur) { G.scene.remove(grp); mat.dispose(); return false; }
+      return true;
+    }
+  });
+}
+
+// 地雷：敵人或野狼靠近就爆炸，最多同時 6 顆
+const mineGeo = new THREE.CylinderGeometry(0.32, 0.38, 0.14, 10), mineMat = new THREE.MeshLambertMaterial({ color: 0x3a3428 });
+export function placeMine(x, z) {
+  if (G.mines.length >= 6) return false;
+  const m = new THREE.Mesh(mineGeo, mineMat); m.position.set(x, heightAt(x, z) + 0.03, z); G.scene.add(m);
+  const led = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 4), new THREE.MeshBasicMaterial({ color: 0xff2a1a, fog: false })); led.position.y = 0.09; m.add(led);
+  G.mines.push({ x, z, mesh: m, led, arm: 1.5 });
+  G.ui.msg('🔘 地雷已埋下，1.5 秒後啟動。友軍與你不會觸發。', 'info');
+  return true;
+}
+export function updateMines(dt) {
+  for (const mn of G.mines) {
+    if (mn.arm > 0) { mn.arm -= dt; mn.led.visible = Math.sin(G.now * 20) > 0; continue; }
+    mn.led.visible = Math.sin(G.now * 4) > 0.6;
+    let hit = false;
+    for (const a of G.actors) if (a.alive && a.faction === 'enemy' && Math.hypot(a.pos.x - mn.x, a.pos.z - mn.z) < 2.2 + (a.horse ? 0.6 : 0)) { hit = true; break; }
+    if (!hit) for (const a of G.animals) if (a.alive && a.kind === 'wolf' && Math.hypot(a.pos.x - mn.x, a.pos.z - mn.z) < 2) { hit = true; break; }
+    if (hit) { mn.gone = true; G.scene.remove(mn.mesh); explode(V.set(mn.x, heightAt(mn.x, mn.z) + 0.3, mn.z), 6.5, 200, true); }
+  }
+  G.mines = G.mines.filter(m => !m.gone);
+}
+
 export function alertEnemies(pos, range) {
   for (const a of G.actors) if (a.alive && a.faction === 'enemy' && d2(a.pos, pos) < range) a.alert = Math.max(a.alert, 8);
   for (const a of G.animals) if (a.alive && a.kind === 'deer' && d2(a.pos, pos) < range * 0.7) a.fleeT = 6;

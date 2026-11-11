@@ -141,7 +141,7 @@ body.touch .tabs button { padding: 6px 10px; font-size: 14px; } body.touch #dlg-
 body.touch .menu.low { padding-bottom: calc(8px + var(--sb)); } body.touch .btns.col { gap: 6px; margin-top: 8px; }
 #rotate-hint { position: fixed; left: 50%; top: calc(8px + var(--st)); transform: translateX(-50%); z-index: 30; background: rgba(60,45,15,.92); border: 1px solid #d4af37; border-radius: 20px; padding: 6px 16px; font-size: 13px; white-space: nowrap; pointer-events: none; }
 @media (orientation: portrait) {
-  body.touch { --cb: 104px; }
+  body.touch { --cb: calc(104px + (var(--bs, 1) - 1) * 180px); } /* 按鍵放大時快捷列會換行，右側按鍵再往上讓 */
   body.touch #quest { max-width: 44vw; } body.touch #compass { width: 36vw; } body.touch #topbar { top: calc(112px + var(--st)); }
   body.touch #boss { top: calc(156px + var(--st)); width: 70vw; } body.touch #msgs { top: calc(190px + var(--st)); width: 70vw; }
   body.touch #t-m { right: calc(8px + var(--sr)); top: calc(110px + var(--st)); } body.touch #t-p { right: calc(8px + 48px * var(--bs, 1) + var(--sr)); top: calc(110px + var(--st)); }
@@ -181,9 +181,15 @@ body.touch #followers div { margin: 0; line-height: 1.35; white-space: nowrap; }
 #quest-orders { font-size: 12px; color: #ffd24a; margin-top: 2px; } #quest-orders:empty { display: none; }
 body.touch #quest-orders { font-size: 11px; }
 /* 按鍵放大時，快捷列往左讓開右側按鍵（僅橫向） */
-@media (orientation: landscape) { body.touch #t-quick { transform: translateX(calc(-50% - (var(--bs, 1) - 1) * 240px)); } }
+@media (orientation: landscape) { body.touch #t-quick { transform: translateX(calc(-50% - 22px - (var(--bs, 1) - 1) * 290px)); } }
+body.touch #t-quick { flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100vw - 16px); }
 body.touch #msgs { top: calc(134px + var(--st)); }
 @media (orientation: portrait) { body.touch #msgs { top: calc(190px + var(--st)); } }
 body.touch .set-row { margin: 4px 0; } body.touch .set-row label { font-size: 13px; width: 5.5em; } body.touch .set-row input[type=range] { height: 24px; }
 body.touch #menu-settings h2 { margin: 0 0 4px; } body.touch #menu-settings .dim { font-size: 11px; margin: 4px 0; }
 body.touch .seg button { padding: 4px 2px; min-height: 32px; font-size: 13px; }
+
+/* ---------- 軍火工坊 ---------- */
+#menu-workshop .tabs { flex-wrap: wrap; } #ws-status { margin: -2px 0 6px; } .ws-note { color: #b8f0a0; margin: 4px 0 8px; font-size: 14px; }
+#ws-body h3 { margin: 12px 0 4px; } #ws-body .dim { margin: 4px 0; }
+body.touch #menu-workshop .tabs button { padding: 5px 8px; font-size: 13px; } body.touch #menu-workshop .ttl { font-size: 15px; }

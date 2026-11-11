@@ -2,7 +2,7 @@
 export const G = {
   scene: null, camera: null, renderer: null,
   world: null, player: null, ui: null,
-  actors: [], animals: [], attendants: [],
+  actors: [], animals: [], attendants: [], mines: [],
   squadCmd: 'follow', holdPos: null, cutscene: null, projectiles: [], pickups: [], effects: [],
   time: 8 * 60,      // 一天中的分鐘數 0..1440
   day: 1,

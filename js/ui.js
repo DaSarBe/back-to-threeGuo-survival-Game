@@ -14,7 +14,7 @@ import { S, DEFAULTS, QUALITY, saveSettings } from './settings.js';
 const $ = id => document.getElementById(id);
 const el = {};
 let hitT = 0, mapT = 0, last = {}, bossRef = null;
-const MENUS = ['start', 'pause', 'inv', 'dialog', 'shop', 'dead', 'win', 'settings'];
+const MENUS = ['start', 'pause', 'inv', 'dialog', 'shop', 'dead', 'win', 'settings', 'workshop'];
 
 export const ui = {
   dirty: true,
@@ -46,7 +46,7 @@ export const ui = {
     for (const m of MENUS) $('menu-' + m).classList.add('hidden');
     G.menu = null; G.lockPointer && G.lockPointer(); document.body.classList.remove('menu-open');
   },
-  escape() { if (G.menu === 'settings') this.closeSettings(); else if (['pause', 'inv', 'shop', 'dialog', 'win'].includes(G.menu)) this.close(); },
+  escape() { if (G.menu === 'settings') this.closeSettings(); else if (['pause', 'inv', 'shop', 'dialog', 'win', 'workshop'].includes(G.menu)) this.close(); },
   // ---------- 設定 ----------
   openSettings() { this.settingsFrom = G.menu || 'pause'; this.open('settings'); this.renderSettings(); },
   closeSettings() { this.open(this.settingsFrom === 'start' ? 'start' : 'pause'); },
@@ -242,8 +242,13 @@ export const ui = {
       el['ammo-w'].textContent = w.n + (P.reloadT > 0 ? '　換彈中…' : '');
       el['ammo-n'].innerHTML = w.type === 'gun' ? `${P.mags[P.cur]} <small>/ ${w.ammo ? P.count(w.ammo) : '∞'}</small>` : w.type === 'bow' ? `${P.count('arrow')} <small>箭</small>` : '';
       const food = P.count('cooked') + P.count('ration') + P.count('berry') + P.count('meat');
-      if (G.touch) { $('q-cmd').textContent = SQUAD_CMDS.find(c => c.id === G.squadCmd).s; $('q-food').textContent = food; $('q-water').textContent = P.canteen; $('q-med').textContent = P.count('medicine'); $('q-gren').textContent = P.count('grenade'); }
-      el.quick.innerHTML = `💣 ${P.count('grenade')} <kbd>G</kbd>　🍖 ${food} <kbd>F</kbd><br>💧 ${P.canteen}/3 <kbd>Z</kbd>　💊 ${P.count('medicine')} <kbd>H</kbd><br>🪙 ${P.count('coin')}`;
+      if (G.touch) {
+        $('q-cmd').textContent = SQUAD_CMDS.find(c => c.id === G.squadCmd).s; $('q-food').textContent = food; $('q-water').textContent = P.canteen; $('q-med').textContent = P.count('medicine');
+        if (P.count(P.thrown) <= 0) { const o = P.ownedThrowables(); if (o.length) P.thrown = o[0]; }
+        $('q-throw-i').textContent = ITEMS[P.thrown].i; $('q-gren').textContent = P.count(P.thrown);
+        $('q-cycle').classList.toggle('hidden', P.ownedThrowables().length < 2);
+      }
+      el.quick.innerHTML = `💣 ${P.count('grenade')} <kbd>G</kbd>　🔥 ${P.count('firebomb')} <kbd>T</kbd>　🔘 ${P.count('mine')} <kbd>B</kbd><br>🍖 ${food} <kbd>F</kbd>　💧 ${P.canteen}/3 <kbd>Z</kbd>　💊 ${P.count('medicine')} <kbd>H</kbd><br>🪙 ${P.count('coin')}`;
     }
 
     // 任務與羅盤

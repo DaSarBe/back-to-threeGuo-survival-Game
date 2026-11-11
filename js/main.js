@@ -4,8 +4,9 @@ import { world, buildWorld, updateSky, updateNodes, heightAt, inSite, SITES, set
 import { S, quality } from './settings.js';
 import { updateWeather, rebuildRain, clearWeather } from './weather.js';
 import { OR, loadOrders, checkOrders } from './orders.js';
+import { loadWorkshop, saveWorkshop, tickWorkshop, openWorkshop, initWorkshopUI, depositFromAttendant, render as renderWorkshop } from './workshop.js';
 import { player, updatePlayer, initInput, resetInput } from './player.js';
-import { Actor, Animal, updateProjectiles, updatePickups, updateEffects, initFx } from './entities.js';
+import { Actor, Animal, updateProjectiles, updatePickups, updateEffects, initFx, updateMines } from './entities.js';
 import { ui } from './ui.js';
 import { audio } from './audio.js';
 import { checkQuest } from './quests.js';
@@ -28,7 +29,7 @@ function init() {
   const camera = G.camera = new THREE.PerspectiveCamera(74, 1, 0.08, 2400); camera.rotation.order = 'YXZ'; scene.add(camera);
   G.world = world; G.player = player; G.ui = ui;
   buildWorld(scene); initFx(scene); ui.init(); initInput(canvas);
-  G.applySettings('all');
+  G.applySettings('all'); initWorkshopUI();
   const resize = () => {
     const w = innerWidth, h = innerHeight, asp = w / h;
     renderer.setSize(w, h, false); camera.aspect = asp;
@@ -74,8 +75,9 @@ function start(save) {
     const p = save.p;
     P.pos.set(p.x, heightAt(p.x, p.z), p.z); P.yaw = p.yaw;
     Object.assign(P, { hp: p.hp, hunger: p.hunger, thirst: p.thirst, inv: p.inv, owned: p.owned, mags: p.mags, armor: p.armor, canteen: p.canteen, cur: p.cur, damp: p.damp || 0 });
-    loadOrders(save.orders);
+    loadOrders(save.orders); P.upg = p.upg || {}; P.statsChanged();
   }
+  loadWorkshop(save && save.ws);
   populate();
   if (save && save.p.horse) { const h = spawnHorse(P.pos.x + 3, P.pos.z + 2, save.p.horse === 'red'); h.tame(); P.horse = h; }
   if (save) { // 還原隨行部隊與侍從
@@ -84,7 +86,7 @@ function start(save) {
     for (const [id, r] of save.squad || []) { const [x, z] = around(i++); spawnRecruit(id, x, z, r); }
     for (const id of save.gens || []) { const a = G.actors.find(x => x.id === id); if (a) { const [x, z] = around(i++); a.follow = true; a.pos.set(x, 0, z); (G.flags.hired || (G.flags.hired = {}))[id] = true; } } // 舊存檔已同行的名將視為已招攬
     reslot();
-    if (save.att) for (const o of save.att) giveAttendant(o.spec, P.pos.x + rnd(-2, 2), P.pos.z + rnd(-2, 2), o);
+    if (save.att) for (const o of save.att) { const wp = o.ws && o.waitPos; giveAttendant(o.spec, wp ? wp.x : P.pos.x + rnd(-2, 2), wp ? wp.z : P.pos.z + rnd(-2, 2), o); }
     else if (G.stage >= 1) giveAttendant('all'); // 舊存檔：補發劉備贈送的侍從
     if (save.cmd === 'attack') G.squadCmd = 'attack';
   }
@@ -188,21 +190,23 @@ G.onKill = (a) => {
   }
 };
 G.cycleCommand = cycleCommand;
+G.openWorkshop = openWorkshop;
+G.wsDeposit = depositFromAttendant;
 // 玩家倒下被救回營地：隨行部隊與侍從一起撤回
 G.onRespawn = () => {
   const P = player;
   if (G.squadCmd === 'hold') { G.squadCmd = 'follow'; G.holdPos = null; }
   for (const a of followers()) { a.target = null; a.pos.set(P.pos.x + rnd(-4, 4), 0, P.pos.z + rnd(-4, 4)); }
-  for (const a of G.attendants) { a.wait = false; a.state = 'idle'; a.node = null; a.pos.set(P.pos.x + rnd(-2, 2), 0, P.pos.z + rnd(-2, 2)); }
+  for (const a of G.attendants) { if (a.ws) continue; a.wait = false; a.state = 'idle'; a.node = null; a.pos.set(P.pos.x + rnd(-2, 2), 0, P.pos.z + rnd(-2, 2)); }
   if (followers().length) ui.msg('隨行部隊護送你撤回了營地。', 'info');
 };
 G.save = () => {
   const P = player; if (!started || !P.alive) return;
-  const d = { v: 1, stage: G.stage, killed: G.killed, day: G.day, time: G.time, flags: G.flags, p: { x: P.pos.x, z: P.pos.z, yaw: P.yaw, hp: P.hp, hunger: P.hunger, thirst: P.thirst, inv: P.inv, owned: P.owned, mags: P.mags, armor: P.armor, canteen: P.canteen, cur: P.cur, damp: Math.round(P.damp), horse: P.horse ? (P.horse.name === '赤兔馬' ? 'red' : 'yes') : null },
+  const d = { v: 1, stage: G.stage, killed: G.killed, day: G.day, time: G.time, flags: G.flags, p: { x: P.pos.x, z: P.pos.z, yaw: P.yaw, hp: P.hp, hunger: P.hunger, thirst: P.thirst, inv: P.inv, owned: P.owned, mags: P.mags, armor: P.armor, canteen: P.canteen, cur: P.cur, damp: Math.round(P.damp), upg: P.upg, horse: P.horse ? (P.horse.name === '赤兔馬' ? 'red' : 'yes') : null },
     squad: followers().filter(a => a.recruited).map(a => [a.id, +(a.hp / a.maxHp).toFixed(2)]),
     gens: followers().filter(a => a.def.general).map(a => a.id),
-    att: G.attendants.map(a => ({ spec: a.spec, inv: a.inv, focus: a.focus, wait: a.wait, waitPos: a.waitPos })),
-    cmd: G.squadCmd, orders: OR };
+    att: G.attendants.map(a => ({ spec: a.spec, inv: a.inv, focus: a.focus, wait: a.wait, waitPos: a.waitPos, ws: !!a.ws })),
+    cmd: G.squadCmd, orders: OR, ws: saveWorkshop() };
   try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { }
 };
 
@@ -356,14 +360,14 @@ function frame(t) {
   } else if (!G.menu) {
     G.now += dt;
     director(dt);
-    updateWeather(dt);
+    updateWeather(dt); tickWorkshop(dt);
     updatePlayer(dt);
     for (const a of G.actors) a.update(dt);
     for (const a of G.animals) a.update(dt);
     for (const a of G.attendants) a.update(dt);
     separate();
     checkArena();
-    updateProjectiles(dt); updatePickups(dt); updateEffects(dt); updateNodes(dt);
+    updateProjectiles(dt); updatePickups(dt); updateEffects(dt); updateNodes(dt); updateMines(dt);
     updateSky(dt, cam.position);
     ui.update(dt);
     adaptResolution(t);

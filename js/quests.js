@@ -5,6 +5,7 @@ import { world } from './world.js';
 import * as SQ from './squad.js';
 import * as OD from './orders.js';
 import { raining } from './weather.js';
+import * as WK from './workshop.js';
 
 export const QUESTS = [
   { t: '亂世求生', d: '打開身旁的軍火箱，然後前往東南方的劉備軍營，找劉備談談。', site: 'camp' },
@@ -183,6 +184,8 @@ function nextHint() {
   const late = OD.OR.active.filter(o => o.due <= G.day); if (late.length) tips.push(`有 ${late.length} 張訂單今天到期，別忘了交貨！`);
   if (raining()) tips.push('下雨了，自製彈藥容易啞火，手槍不受影響。躲到營火旁能烘乾火藥。');
   if (P.count('wetPowder') >= 2) tips.push('背包裡有受潮火藥，到營火旁就能烘乾。');
+  if (G.stage >= 1 && !G.ws.built) tips.push('劉備營外的空地可以蓋軍火工坊，自動生產火藥和彈藥。');
+  else if (G.ws.built && !G.ws.lv.forge) tips.push('工坊蓋好鐵匠爐，就能自動造彈藥、改良槍械。');
   return tips.join('\n');
 }
 function craftable() {
@@ -194,7 +197,7 @@ function attendantDialog(a) {
   const n = a.carried;
   const back = text => ({ text, opts: attendantOpts(a) });
   return {
-    text: (n ? `我身上帶了 ${n}/${a.cap} 件東西，隨時可以交給您。` : `我還沒撿到東西，再等等。`) + (a.wait ? '\n（目前在這裡留守採集）' : ''),
+    text: a.ws ? `我在工坊幫忙，採到的東西都放進倉庫了（倉庫 ${WK.stored()}/${WK.cap()}）。` : (n ? `我身上帶了 ${n}/${a.cap} 件東西，隨時可以交給您。` : `我還沒撿到東西，再等等。`) + (a.wait ? '\n（目前在這裡留守採集）' : ''),
     opts: attendantOpts(a, back),
   };
 }
@@ -210,7 +213,8 @@ function attendantOpts(a, back = text => ({ text, opts: attendantOpts(a) })) {
       opts: FOCUS.map(([k, label]) => ({ t: label, fn: () => { a.focus = k; return back(`好，我會專心撿${label === '什麼都撿' ? '各種東西' : label}。`); } })),
     })
   });
-  o.push(a.wait ? { t: '跟著我。', fn: () => { a.wait = false; return back('是！'); } }
+  if (G.ws.built) o.push(a.ws ? { t: '回到我身邊。', fn: () => { WK.assign(a, false); return back('是，這就跟上！'); } } : { t: '到工坊幫忙。', fn: () => { WK.assign(a, true); return back('好！我會在工坊附近採集，東西直接放進倉庫。'); } });
+  if (!a.ws) o.push(a.wait ? { t: '跟著我。', fn: () => { a.wait = false; return back('是！'); } }
     : { t: '留在這裡採集，等我回來。', fn: () => { a.wait = true; a.waitPos = { x: a.pos.x, z: a.pos.z }; return back('好，我就在這附近撿東西。'); } });
   o.push(BYE);
   return o;
@@ -232,7 +236,7 @@ export function dialogFor(a) {
                 P.give('coin', 60, true); P.give('ration', 3, true); advance();
                 if (!SQ.ownsAttendant('all')) SQ.giveAttendant('all', a.pos.x + 1.5, a.pos.z - 2, { first: true });
                 return {
-                  text: '哈哈，足下真乃妙人！\n營中小廝阿福手腳勤快，就讓他跟著你打點雜務——撿柴採藥都行，有事儘管問他。\n張角盤踞在西南方的黃巾營寨。你可在我這裡招兵買馬，帶些弟兄同去。',
+                  text: '哈哈，足下真乃妙人！\n營中小廝阿福手腳勤快，就讓他跟著你打點雜務——撿柴採藥都行，有事儘管問他。\n營外西北那塊空地也撥給你，蓋座工坊造你的火器吧。\n張角盤踞在西南方的黃巾營寨。你可在我這裡招兵買馬，帶些弟兄同去。',
                   opts: [{ t: '招兵買馬', fn: () => recruitNode(a) }, BYE],
                 };
               }

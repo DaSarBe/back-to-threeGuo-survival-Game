@@ -14,6 +14,7 @@ export const SITES = {
   sishui: { x: 300, z: -230, r: 36, name: '汜水關' },
   hulao: { x: -180, z: -300, r: 40, name: '虎牢關' },
   meiwu: { x: 340, z: 290, r: 46, name: '郿塢' },
+  workshop: { x: 40, z: 31, r: 13, name: '軍火工坊' },
 };
 
 export function riverX(z) { return 150 + 45 * Math.sin(z / 110) + 20 * Math.sin(z / 37); }
@@ -445,6 +446,57 @@ function wallBox(scene, x0, z0, x1, z1, H) {
   world.addBox(x0, z0, x1, z1, H);
 }
 
+// ---- 軍火工坊：依建造等級重建模型 ----
+let wsGroup = null, wsSign = null;
+const wsCol = new Set();
+function wsCollide(key, fn) { if (!wsCol.has(key)) { wsCol.add(key); fn(); } }
+export function buildWorkshop(st) {
+  const scene = G.scene, s = SITES.workshop, cx = s.x, cz = s.z, y = heightAt(cx, cz);
+  if (wsGroup) { scene.remove(wsGroup); wsGroup.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }
+  wsGroup = new THREE.Group(); scene.add(wsGroup);
+  const add = (parts, x, z, ry = 0) => { const m = meshOf(parts, true); m.position.set(cx + x, y, cz + z); m.rotation.y = ry; m.receiveShadow = true; wsGroup.add(m); };
+  const W = 0x6a4a2a, DK = 0x4a3420, ROOF = 0x5a3a24, STONE = 0x7a766e;
+  // 四角木樁與麻繩
+  const stake = [];
+  for (const [a, b] of [[-10, -10], [10, -10], [-10, 10], [10, 10]]) stake.push(cyl(0.1, 0.12, 1.4, 5, DK, a, 0.7, b));
+  add(stake, 0, 0);
+  if (!wsSign) {
+    wsSign = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 0.76), new THREE.MeshBasicMaterial({ map: plaque(st.built ? '軍火工坊' : '工坊預定地') }));
+    scene.add(wsSign);
+  } else wsSign.material.map = plaque(st.built ? '軍火工坊' : '工坊預定地');
+  add([cyl(0.08, 0.08, 2.6, 5, DK, -1.1, 1.3, 0), cyl(0.08, 0.08, 2.6, 5, DK, 1.1, 1.3, 0)], 0, -10.5);
+  wsSign.position.set(cx, y + 2.1, cz - 10.45); wsSign.rotation.y = PI;
+  if (!st.built) return;
+  // 工坊主棚：屋頂、工作台、鐵砧
+  const shed = [];
+  for (const [a, b] of [[-3.2, -2.6], [3.2, -2.6], [-3.2, 2.6], [3.2, 2.6]]) shed.push(cyl(0.14, 0.16, 3.2, 6, W, a, 1.6, b));
+  shed.push(bx(7.6, 0.2, 6.4, ROOF, 0, 3.3, 0, 0.12), bx(2.4, 0.9, 1, 0x5a3a1c, 0, 0.45, 1.4), bx(0.5, 0.5, 0.5, 0x2a2a2e, 1.6, 0.25, -1), bx(0.7, 0.18, 0.35, 0x3a3a40, 1.6, 0.6, -1));
+  shed.push(bx(0.5, 0.12, 0.2, 0x25262a, -0.4, 0.96, 1.4), bx(0.3, 0.3, 0.3, 0xc8a050, 0.6, 1.05, 1.4));
+  add(shed, 0, 0);
+  wsCollide('shed', () => { world.addBox(cx - 1.2, cz + 0.9, cx + 1.2, cz + 1.9, 1); for (const [a, b] of [[-3.2, -2.6], [3.2, -2.6], [-3.2, 2.6], [3.2, 2.6]]) world.addCircle(cx + a, cz + b, 0.25, 3); });
+  wsCollide('fire', () => campfire(scene, cx + 6, cz + 6.5));
+  const L = st.lv;
+  if (L.mill) { // 火藥坊：小屋＋火藥桶
+    const p = [bx(3.2, 2.4, 3, 0x8a7a5a, 0, 1.2, 0), cone(2.8, 1.4, 4, ROOF, 0, 3.1, 0, 0, PI / 4), bx(1, 1.6, 0.1, 0x2a1a10, 0, 0.8, 1.52)];
+    for (let i = 0; i < L.mill * 2; i++) p.push(cyl(0.32, 0.36, 0.8, 8, 0x5a3a1c, 2.1 + (i % 2) * 0.75, 0.4, -1 + Math.floor(i / 2) * 0.8), cyl(0.34, 0.34, 0.06, 8, 0x2a2a2e, 2.1 + (i % 2) * 0.75, 0.62, -1 + Math.floor(i / 2) * 0.8));
+    add(p, -6.2, 4.5);
+    wsCollide('mill', () => world.addBox(cx - 7.8, cz + 3, cx - 4.6, cz + 6, 3));
+  }
+  if (L.forge) { // 鐵匠爐：石爐＋煙囪（等級越高煙囪越高）
+    const h = 2.6 + L.forge * 0.8;
+    const p = [bx(2.2, 1.5, 2, STONE, 0, 0.75, 0), bx(1, 0.7, 0.1, 0xff7a20, 0, 0.75, 1.01), cyl(0.38, 0.45, h, 8, STONE, 0.5, 1.5 + h / 2, -0.5), bx(1.2, 0.8, 0.8, 0x2a2a2e, -1.8, 0.4, 0.6)];
+    for (let i = 0; i < L.forge; i++) p.push(bx(0.6, 0.12, 0.25, 0x3a3a40, -1.8, 0.86 + i * 0.13, 0.6));
+    add(p, 6.2, -3.5);
+    wsCollide('forge', () => world.addBox(cx + 5.1, cz - 4.5, cx + 7.3, cz - 2.5, 2));
+  }
+  if (L.store) { // 倉庫：木屋＋木箱
+    const p = [bx(4.2, 2.8, 3.4, 0x7a5a3a, 0, 1.4, 0), bx(4.6, 0.25, 3.8, ROOF, 0, 2.95, 0), bx(1.4, 2, 0.1, 0x3a2414, 0, 1, 1.71)];
+    for (let i = 0; i < L.store * 2; i++) p.push(bx(0.8, 0.8, 0.8, 0x8a6a3a, 2.7, 0.4 + Math.floor(i / 2) * 0.8, -1 + (i % 2) * 0.9));
+    add(p, -6.2, -4.5);
+    wsCollide('store', () => world.addBox(cx - 8.3, cz - 6.2, cx - 4.1, cz - 2.8, 3));
+  }
+}
+
 // ---- 各據點 ----
 function buildSites(scene) {
   const S = SITES, sp = world.spots;
@@ -560,6 +612,9 @@ function buildSites(scene) {
     campfire(scene, cx - 12, cz - 6, true); campfire(scene, cx + 12, cz - 6, true);
     for (const [dx, dz] of [[-24, -20], [24, -20], [-25, 4], [25, 4]]) tent(scene, cx + dx, cz + dz, 0x4a2a5a, 1, dx > 0 ? -1.5 : 1.5);
     sp.dongzhuo = [cx, cz + 3]; sp.meiwuGate = [cx, cz - R - 8];
+  }
+  { // 工坊預定地：互動點
+    const s = S.workshop; world.addNode({ kind: 'workshop', x: s.x, z: s.z - 4, stock: 1 });
   }
 }
 

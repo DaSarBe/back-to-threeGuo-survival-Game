@@ -20,6 +20,8 @@ export const ITEMS = {
   shell: { n: '霰彈', i: '🔴' },
   rifleAmmo: { n: '步槍彈', i: '🔸' },
   grenade: { n: '震天雷', i: '💣' },
+  firebomb: { n: '燃燒彈', i: '🔥' },
+  mine: { n: '地雷', i: '🔘' },
 };
 
 // 快捷列順序
@@ -46,6 +48,8 @@ export const RECIPES = [
   { id: 'drypowder', n: '烘乾火藥', d: '須在營火旁', near: 'fire', need: { wetPowder: 2, wood: 1 }, give: { powder: 2 } },
   { id: 'oilcloth', n: '油布包', d: '獸油浸布，大幅減緩火藥受潮', once: 'oilcloth', need: { meat: 3, herb: 2 }, give: { oilcloth: 1 } },
   { id: 'cooked', n: '烤肉', d: '熟食更能充飢', need: { meat: 1, wood: 1 }, give: { cooked: 1 } },
+  { id: 'firebomb', n: '燃燒彈 ×2', d: '獸油火罐，落地起火燒一片（雨天燒得短）', need: { powder: 1, meat: 1, wood: 1 }, give: { firebomb: 2 } },
+  { id: 'mine', n: '地雷', d: '埋在地上，敵人踩到就爆炸', need: { powder: 2, iron: 2 }, give: { mine: 1 } },
   { id: 'medicine', n: '金瘡藥', d: '按 H 使用，恢復生命', need: { herb: 2 }, give: { medicine: 1 } },
 ];
 
@@ -65,6 +69,8 @@ export const SHOP_BUY = [
 ];
 export const SHOP_SELL = [
   { item: 'grenade', price: 60 },
+  { item: 'mine', price: 45 },
+  { item: 'firebomb', price: 25 },
   { item: 'powder', price: 12 },
   { item: 'shell', price: 5 },
   { item: 'rifleAmmo', price: 6 },
@@ -160,3 +166,27 @@ export const SQUAD_CMDS = [
   { id: 'hold', n: '原地堅守', s: '守' },
   { id: 'attack', n: '自由攻擊', s: '攻' },
 ];
+
+// ---------- 軍火工坊 ----------
+// base：工坊本體；mill：火藥坊（自動燒炭、配火藥）；forge：鐵匠爐（自動造彈藥，並決定武器改良上限）；store：倉庫（容量、防潮）
+export const WS_BUILD = {
+  base: { n: '軍火工坊', d: '在營外蓋自己的工坊，附營火與小倉庫', max: 1, cost: [{ coin: 80, wood: 20, iron: 5 }] },
+  mill: { n: '火藥坊', d: '每輪自動把木材燒成木炭，再配成黑火藥', max: 3, cost: [{ coin: 60, wood: 15, iron: 5 }, { coin: 150, wood: 25, iron: 10 }, { coin: 300, wood: 40, iron: 20 }] },
+  forge: { n: '鐵匠爐', d: '每輪自動製造指定的彈藥；等級也決定武器能改良到幾級', max: 3, cost: [{ coin: 80, wood: 10, iron: 15 }, { coin: 180, wood: 20, iron: 25 }, { coin: 350, wood: 30, iron: 40 }] },
+  store: { n: '倉庫', d: '加大工坊倉庫容量；放在倉庫裡的火藥不會受潮', max: 3, cost: [{ coin: 50, wood: 20 }, { coin: 120, wood: 35, iron: 10 }, { coin: 250, wood: 50, iron: 20 }] },
+};
+export const WS_CAP = [40, 100, 200, 400];   // 依倉庫等級
+export const WS_CYCLE = 60;                  // 每輪生產秒數
+export const WS_PRODUCTS = ['shell', 'rifleAmmo', 'arrow', 'grenade', 'firebomb', 'mine'];
+export const WS_RAW = ['saltpeter', 'sulfur', 'charcoal', 'wetPowder', 'iron', 'meat', 'wood']; // 依珍貴程度存入，木材最後
+
+// ---------- 武器改良（在工坊進行，等級上限 = 鐵匠爐等級，最多 2 級） ----------
+export const GUNS = ['pistol', 'shotgun', 'rifle'];
+export const UPGRADES = {
+  mag: { n: { pistol: '加長彈匣', shotgun: '加裝彈倉', rifle: '加長彈匣' }, d: '彈匣容量增加', lv: [{ pistol: 17, shotgun: 8, rifle: 7 }, { pistol: 24, shotgun: 10, rifle: 10 }] },
+  acc: { n: { pistol: '改良膛線', shotgun: '收束噴口', rifle: '改良膛線' }, d: '散布縮小、打得更準', mult: [0.7, 0.45] },
+  dmg: { n: { pistol: '強化彈頭', shotgun: '精製火藥', rifle: '精製火藥' }, d: '傷害提高', mult: [1.2, 1.4] },
+};
+const UP_BASE = [{ coin: 80, iron: 6, powder: 2 }, { coin: 200, iron: 12, powder: 5 }];
+const UP_MUL = { pistol: 1, shotgun: 1.2, rifle: 1.5 };
+export const upgradeCost = (gun, lv) => Object.fromEntries(Object.entries(UP_BASE[lv]).map(([k, v]) => [k, Math.round(v * UP_MUL[gun])]));

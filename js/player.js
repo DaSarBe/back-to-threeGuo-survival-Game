@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { G } from './state.js';
-import { ITEMS, WEAPONS, HOTBAR } from './data.js';
+import { ITEMS, WEAPONS, HOTBAR, UPGRADES } from './data.js';
 import { world, heightAt, WATER, HALF, SITES } from './world.js';
 import { viewModel } from './models.js';
 import { audio } from './audio.js';
-import { spawnArrow, spawnGrenade, alertEnemies, fxTracer, fxBurst } from './entities.js';
+import { spawnArrow, spawnGrenade, placeMine, alertEnemies, fxTracer, fxBurst } from './entities.js';
 import { clamp, lerp, rnd, turnTo, dist2 } from './util.js';
 import { misfireChance, dudChance } from './weather.js';
 
@@ -17,7 +17,7 @@ const vms = {};
 
 export const player = {
   pos: new THREE.Vector3(), vy: 0, yaw: 0, pitch: 0, onGround: true, alive: true, radius: 0.4, eyeH: 1.68,
-  hp: 100, maxHp: 100, hunger: 100, thirst: 100, stamina: 100, armor: 0, canteen: 3, damp: 0,
+  hp: 100, maxHp: 100, hunger: 100, thirst: 100, stamina: 100, armor: 0, canteen: 3, damp: 0, upg: {}, thrown: 'grenade',
   inv: {}, owned: { pistol: true }, cur: 'pistol', mags: { pistol: 12, shotgun: 6, rifle: 5 },
   fireCd: 0, reloadT: 0, swingT: 0, meleeT: 0, recoil: 0, shake: 0, aim: 0, mount: null, horse: null,
   kx: 0, kz: 0, sprinting: false, stepT: 0, bob: 0, hurtT: 0, speedNow: 0, hx: 0, hz: 0, throwCd: 0,
@@ -87,11 +87,46 @@ export const player = {
     if (!h || this.mount) return G.ui.msg(this.mount ? '你已經在馬上了。' : '你還沒有自己的馬。', 'info');
     h.state = 'come'; G.ui.msg(`你吹了聲口哨，${h.name}正朝你奔來。`, 'info'); audio.play('neigh', 0.6);
   },
-  throwGrenade() {
+  // ---- 投擲物：震天雷 / 燃燒彈 / 地雷 ----
+  throwItem(kind) {
     if (this.throwCd > 0) return;
-    if (!this.take('grenade')) return G.ui.msg('沒有震天雷（2 黑火藥 + 1 鐵礦）。', 'warn');
-    this.throwCd = 0.8; camDir(D); O.copy(G.camera.position).addScaledVector(D, 0.6);
-    V.copy(D).multiplyScalar(19); V.y += 5.5; spawnGrenade(O, V, Math.random() < dudChance()); audio.play('swing');
+    const hint = { grenade: '2 黑火藥 + 1 鐵礦', firebomb: '1 黑火藥 + 1 生肉 + 1 木材', mine: '2 黑火藥 + 2 鐵礦' }[kind];
+    if (!this.take(kind)) return G.ui.msg(`沒有${ITEMS[kind].n}（${hint}，可在製作頁或工坊做）。`, 'warn');
+    this.throwCd = 0.8; G.ui.dirty = true;
+    if (kind === 'mine') {
+      const fx = -Math.sin(this.yaw), fz = -Math.cos(this.yaw);
+      if (!placeMine(this.pos.x + fx * 1.6, this.pos.z + fz * 1.6)) { this.give(kind); return G.ui.msg('最多同時埋 6 顆地雷。', 'warn'); }
+      audio.play('chop', 0.6); return;
+    }
+    camDir(D); O.copy(G.camera.position).addScaledVector(D, 0.6);
+    V.copy(D).multiplyScalar(19); V.y += 5.5; spawnGrenade(O, V, Math.random() < dudChance(), kind === 'firebomb' ? 'fire' : 'boom'); audio.play('swing');
+  },
+  throwGrenade() { this.throwItem('grenade'); },
+  ownedThrowables() { return ['grenade', 'firebomb', 'mine'].filter(k => this.count(k) > 0); },
+  throwSelected() {
+    if (this.count(this.thrown) <= 0) { const o = this.ownedThrowables(); if (o.length) this.thrown = o[0]; }
+    this.throwItem(this.thrown);
+  },
+  cycleThrown() {
+    const all = ['grenade', 'firebomb', 'mine'], own = this.ownedThrowables();
+    if (!own.length) return G.ui.msg('沒有任何投擲物。', 'info');
+    let i = all.indexOf(this.thrown);
+    for (let k = 0; k < 3; k++) { i = (i + 1) % 3; if (this.count(all[i]) > 0) break; }
+    this.thrown = all[i]; G.ui.dirty = true; audio.play('click');
+    G.ui.msg(`投擲物：${ITEMS[this.thrown].i}${ITEMS[this.thrown].n}（${this.count(this.thrown)}）`, 'info');
+  },
+  // ---- 武器數值（含工坊改良） ----
+  statsChanged() { this._ws = {}; },
+  wstat(id) {
+    const b = WEAPONS[id], u = this.upg[id];
+    if (b.type !== 'gun' || !u) return b;
+    this._ws = this._ws || {};
+    return this._ws[id] || (this._ws[id] = {
+      ...b,
+      mag: u.mag ? UPGRADES.mag.lv[u.mag - 1][id] : b.mag,
+      spread: b.spread * (u.acc ? UPGRADES.acc.mult[u.acc - 1] : 1),
+      dmg: b.dmg * (u.dmg ? UPGRADES.dmg.mult[u.dmg - 1] : 1),
+    });
   },
 
   // ---- 騎馬 ----
@@ -109,13 +144,13 @@ export const player = {
 
   // ---- 武器 ----
   reload() {
-    const w = WEAPONS[this.cur];
+    const w = this.wstat(this.cur);
     if (w.type !== 'gun' || this.reloadT > 0 || this.mags[this.cur] >= w.mag) return;
     if (w.ammo && this.count(w.ammo) <= 0) return G.ui.msg(`沒有${ITEMS[w.ammo].n}了，需要製作。`, 'warn');
     this.reloadT = w.reload; audio.play('reload');
   },
   fire() {
-    const w = WEAPONS[this.cur];
+    const w = this.wstat(this.cur);
     if (this.fireCd > 0 || this.reloadT > 0) return;
     if (w.type === 'gun') {
       if (this.mags[this.cur] <= 0) { audio.play('click'); this.fireCd = 0.25; this.reload(); return; }
@@ -186,7 +221,8 @@ function findInteract() {
   for (const a of G.actors) if (a.alive && a.def.general && a.faction === 'ally') consider(a.pos.x, a.pos.z, 3.6, `與 ${a.name} 交談`, () => G.ui.talk(a));
   for (const a of G.attendants) consider(a.pos.x, a.pos.z, 3.2, `與侍從 ${a.name} 交談` + (a.carried ? `（帶著 ${a.carried} 件）` : ''), () => G.ui.talk(a));
   for (const h of G.animals) if (h.kind === 'horse' && h.alive) consider(h.pos.x, h.pos.z, 3.4, h.tamed ? `騎乘 ${h.name}` : `馴服並騎乘 ${h.name}`, () => P.mountHorse(h));
-  world.nodes.query(P.pos.x, P.pos.z, 3.6, n => {
+  world.nodes.query(P.pos.x, P.pos.z, 7, n => {
+    if (n.kind === 'workshop') return consider(n.x, n.z, 8, G.ws.built ? '管理軍火工坊' : '查看工坊預定地', () => G.openWorkshop());
     if (n.kind === 'tree') consider(n.x, n.z, n.bamboo ? 5 : 2.6, n.bamboo ? '砍伐竹子' : '砍伐樹木', () => gather(n));
     else if (n.kind === 'crate') { if (n.stock > 0) consider(n.x, n.z, 3, '打開軍火箱', () => G.openCrate(n)); }
     else if (n.kind === 'bed') consider(n.x, n.z, 3, '在臥榻休息', () => G.sleep());
@@ -277,7 +313,7 @@ export function updatePlayer(dt) {
   else if (P.hurtT <= 0 && P.hp < P.maxHp && P.hunger > 35 && P.thirst > 35) P.hp = Math.min(P.maxHp, P.hp + dt * 1.3);
 
   // ---- 武器 ----
-  const w = WEAPONS[P.cur];
+  const w = P.wstat(P.cur);
   if (P.reloadT > 0) {
     P.reloadT -= dt;
     if (P.reloadT <= 0) {
@@ -370,7 +406,7 @@ export function initInput(canvas) {
     if (e.repeat) return;
     keys[e.code] = true;
     if (e.code.startsWith('Digit')) { const i = +e.code.slice(5) - 1; if (HOTBAR[i]) { if (P.owned[HOTBAR[i]]) P.equip(HOTBAR[i]); else G.ui.msg(`尚未取得 ${WEAPONS[HOTBAR[i]].n}。`, 'info'); } }
-    else act({ KeyE: 'interact', Space: 'jump', KeyR: 'reload', KeyG: 'grenade', KeyF: 'eat', KeyH: 'heal', KeyZ: 'drink', KeyX: 'whistle', Tab: 'menu', KeyC: 'menu', KeyI: 'menu', KeyM: 'music', KeyV: 'command', Escape: 'pause', KeyP: 'pause' }[e.code]);
+    else act({ KeyE: 'interact', Space: 'jump', KeyR: 'reload', KeyG: 'grenade', KeyT: 'firebomb', KeyB: 'mine', KeyF: 'eat', KeyH: 'heal', KeyZ: 'drink', KeyX: 'whistle', Tab: 'menu', KeyC: 'menu', KeyI: 'menu', KeyM: 'music', KeyV: 'command', Escape: 'pause', KeyP: 'pause' }[e.code]);
   });
   document.addEventListener('keyup', e => { keys[e.code] = false; });
   window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.l = mouse.r = false; });
@@ -435,6 +471,10 @@ function act(a) {
     case 'jump': jumpQ = true; break;
     case 'reload': P.reload(); break;
     case 'grenade': P.throwGrenade(); break;
+    case 'firebomb': P.throwItem('firebomb'); break;
+    case 'mine': P.throwItem('mine'); break;
+    case 'throw': P.throwSelected(); break;
+    case 'cyclethrow': P.cycleThrown(); break;
     case 'eat': P.eat(); break;
     case 'heal': P.heal(); break;
     case 'drink': P.drink(); break;
