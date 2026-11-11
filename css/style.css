@@ -104,6 +104,7 @@ html, body { -webkit-touch-callout: none; overscroll-behavior: none; }
 .tb.sm { width: 42px; height: 42px; font-size: 18px; }
 .tb b { position: absolute; right: -4px; bottom: -4px; min-width: 18px; padding: 0 3px; font-size: 11px; line-height: 16px; border-radius: 9px; background: #1a140e; border: 1px solid #8a6a2a; color: #ffd24a; text-align: center; }
 #t-fire { right: calc(16px + var(--sr)); bottom: calc(62px + var(--sb) + var(--cb)); width: 86px; height: 86px; font-size: 16px; background: rgba(150,30,20,.5); }
+#t-fire2 { left: calc(18px + var(--sl)); bottom: calc(118px + var(--sb) + var(--cb)); width: 68px; height: 68px; font-size: 14px; background: rgba(150,30,20,.45); }
 #t-aim { right: calc(112px + var(--sr)); bottom: calc(108px + var(--sb) + var(--cb)); }
 #t-jump { right: calc(106px + var(--sr)); bottom: calc(38px + var(--sb) + var(--cb)); }
 #t-r { right: calc(30px + var(--sr)); bottom: calc(158px + var(--sb) + var(--cb)); width: 50px; height: 50px; }

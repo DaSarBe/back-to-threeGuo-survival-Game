@@ -9,7 +9,7 @@ import { clamp, lerp, rnd, turnTo, dist2 } from './util.js';
 
 const PI = Math.PI;
 const keys = {}, mouse = { l: false, r: false };
-const touch = { mx: 0, mz: 0, fire: false, joyId: null, lookId: null, fireId: null, fx: 0, fy: 0, jx: 0, jy: 0, lx: 0, ly: 0 };
+const touch = { mx: 0, mz: 0, fire: false, joyId: null, lookId: null, fingers: new Map(), jx: 0, jy: 0, lx: 0, ly: 0 };
 const V = new THREE.Vector3(), D = new THREE.Vector3(), O = new THREE.Vector3(), T = new THREE.Vector3();
 let jumpQ = false, eCd = 0, interact = null, interactT = 0, vmCur = null, flashT = 0, muzzle;
 const vms = {};
@@ -374,7 +374,7 @@ export function initInput(canvas) {
       const el = t.target.closest && t.target.closest('[data-act]');
       if (el) {
         const a = el.dataset.act;
-        if (a === 'fire') { touch.fire = true; touch.fireId = t.identifier; touch.fx = t.clientX; touch.fy = t.clientY; }
+        if (a === 'fire') { touch.fingers.set(t.identifier, { x: t.clientX, y: t.clientY, el }); touch.fire = true; el.classList.add('on'); }
         else if (a === 'aim') { mouse.r = !mouse.r; el.classList.toggle('on', mouse.r); }
         else if (a === 'quest') el.classList.toggle('open');
         else act(a);
@@ -396,9 +396,10 @@ export function initInput(canvas) {
       } else if (t.identifier === touch.lookId) {
         look(t.clientX - touch.lx, t.clientY - touch.ly, 0.0055 * lerp(1, 0.4, P.aim));
         touch.lx = t.clientX; touch.ly = t.clientY;
-      } else if (t.identifier === touch.fireId) { // 開火鍵上的手指各自記錄位置，不與視角手指共用
-        look(t.clientX - touch.fx, t.clientY - touch.fy, 0.0055 * lerp(1, 0.4, P.aim));
-        touch.fx = t.clientX; touch.fy = t.clientY;
+      } else if (touch.fingers.has(t.identifier)) { // 每根按開火的手指（左右兩顆）各自記錄位置，按住也能拖曳瞄準
+        const f = touch.fingers.get(t.identifier);
+        look(t.clientX - f.x, t.clientY - f.y, 0.0055 * lerp(1, 0.4, P.aim));
+        f.x = t.clientX; f.y = t.clientY;
       }
     }
     e.preventDefault();
@@ -407,7 +408,8 @@ export function initInput(canvas) {
     for (const t of e.changedTouches) {
       if (t.identifier === touch.joyId) { touch.joyId = null; touch.mx = touch.mz = 0; joy.style.display = 'none'; }
       if (t.identifier === touch.lookId) touch.lookId = null;
-      if (t.identifier === touch.fireId) { touch.fireId = null; touch.fire = false; }
+      const f = touch.fingers.get(t.identifier);
+      if (f) { touch.fingers.delete(t.identifier); if (![...touch.fingers.values()].some(o => o.el === f.el)) f.el.classList.remove('on'); touch.fire = touch.fingers.size > 0; }
     }
   };
   // 掛在 document：HUD 上的兵器列、任務框、互動提示都能直接點
@@ -434,6 +436,7 @@ function act(a) {
 }
 export function resetInput() {
   for (const k in keys) keys[k] = false; mouse.l = mouse.r = false; touch.fire = false; touch.mx = touch.mz = 0;
-  touch.joyId = touch.lookId = touch.fireId = null;
+  touch.joyId = touch.lookId = null; touch.fingers.clear();
+  document.querySelectorAll('[data-act="fire"].on').forEach(e => e.classList.remove('on'));
   const j = document.getElementById('joy'), a = document.getElementById('t-aim'); if (j) j.style.display = 'none'; if (a) a.classList.remove('on');
 }
