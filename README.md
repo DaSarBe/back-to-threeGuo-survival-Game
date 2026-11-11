@@ -68,6 +68,7 @@ npx http-server -p 8080     # 或 python3 -m http.server 8080
 
 ```
 index.html  css/style.css  vendor/three.module.min.js
+icons/      遊戲圖示（SVG 原檔、各尺寸 PNG、Android 可遮罩版）  manifest.webmanifest  加入主畫面用
 js/main.js      主迴圈、佈置、導演（巡邏／夜襲／重生）、存檔
 js/world.js     地形、天空、據點建築、資源點、碰撞與尋路
 js/entities.js  士兵／名將 AI、動物、投射物、特效、掉落物

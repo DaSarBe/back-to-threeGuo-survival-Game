@@ -209,3 +209,8 @@ body.intro-on #hud, body.intro-on #touch, body.intro-on #rotate-hint { display: 
 @keyframes bp { 0% { opacity: 0; transform: scale(1.6) translateY(20px); } 20% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(.9) translateY(-30px); } }
 #intro-eyes i { position: absolute; left: 0; right: 0; height: var(--e, 0); background: #000; } #intro-eyes i:first-child { top: 0; } #intro-eyes i:last-child { bottom: 0; }
 #intro-skip { position: absolute; right: 3vw; bottom: 3vh; font-size: 12px; color: #aaa; z-index: 2; }
+
+/* 開始畫面的遊戲圖示 */
+.logo { width: clamp(64px, 14vh, 112px); height: auto; display: block; margin: 0 auto 6px; filter: drop-shadow(0 6px 18px rgba(0,0,0,.6)); }
+body.touch .logo { width: clamp(48px, 12vh, 80px); margin-bottom: 2px; }
+#menu-start .btns { position: sticky; bottom: -20px; margin: 12px -26px -20px; padding: 12px; background: linear-gradient(transparent, #1a140e 35%); z-index: 1; }

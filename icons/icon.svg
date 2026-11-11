@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="44%" r="72%"><stop offset="0" stop-color="#9e2618"/><stop offset="0.55" stop-color="#5a120c"/><stop offset="1" stop-color="#1c0504"/></radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f8e08e"/><stop offset="0.5" stop-color="#d4a238"/><stop offset="1" stop-color="#8a6418"/></linearGradient>
+    <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="0.5" stop-color="#d0d4dc"/><stop offset="1" stop-color="#8a8e98"/></linearGradient>
+    <linearGradient id="gun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6a6e78"/><stop offset="1" stop-color="#26282e"/></linearGradient>
+    <radialGradient id="vg"><stop offset="0" stop-color="#d8f6ff" stop-opacity="0.95"/><stop offset="0.35" stop-color="#4a8aff" stop-opacity="0.55"/><stop offset="0.75" stop-color="#2a3aaa" stop-opacity="0.25"/><stop offset="1" stop-color="#1a1a6a" stop-opacity="0"/></radialGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="hot" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="10"/></filter>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect x="26" y="26" width="460" height="460" rx="88" fill="none" stroke="url(#gold)" stroke-width="9"/>
+  <rect x="42" y="42" width="428" height="428" rx="74" fill="none" stroke="#d4a238" stroke-width="2" opacity="0.7"/>
+  <!-- 祥雲 -->
+  <g fill="none" stroke="#e0b448" stroke-width="3.5" stroke-linecap="round" opacity="0.45">
+    <g transform="translate(66 74) scale(1.25)">
+      <path d="M4 34 H70 M10 34 C2 34 0 22 10 20 C10 8 26 6 30 16 C34 4 54 4 56 18 C66 16 72 28 64 34"/>
+      <path d="M30 16 C34 22 44 22 44 14 C44 9 38 8 37 13"/><path d="M10 20 C14 26 22 24 21 18"/>
+    </g>
+    <g transform="translate(446 438) scale(-1.25 -1.25)">
+      <path d="M4 34 H70 M10 34 C2 34 0 22 10 20 C10 8 26 6 30 16 C34 4 54 4 56 18 C66 16 72 28 64 34"/>
+      <path d="M30 16 C34 22 44 22 44 14 C44 9 38 8 37 13"/><path d="M10 20 C14 26 22 24 21 18"/>
+    </g>
+  </g>
+  <!-- 背景光芒 -->
+  <g opacity="0.10" stroke="#f6dc8a" stroke-width="6">
+    <line x1="256" y1="250" x2="256" y2="40"/><line x1="256" y1="250" x2="404" y2="102"/><line x1="256" y1="250" x2="466" y2="250"/><line x1="256" y1="250" x2="404" y2="398"/>
+    <line x1="256" y1="250" x2="256" y2="466"/><line x1="256" y1="250" x2="108" y2="398"/><line x1="256" y1="250" x2="46" y2="250"/><line x1="256" y1="250" x2="108" y2="102"/>
+  </g>
+  <!-- 時空漩渦 -->
+  <circle cx="256" cy="250" r="160" fill="url(#vg)"/>
+  <g filter="url(#glow)" fill="none">
+    <circle cx="256" cy="250" r="148" stroke="#3ab0ff" stroke-width="13"/>
+    <circle cx="256" cy="250" r="121" stroke="#a066ff" stroke-width="7"/>
+    <circle cx="256" cy="250" r="98" stroke="#5ae8ff" stroke-width="4" opacity="0.9"/>
+    <circle cx="256" cy="250" r="135" stroke="#e8f8ff" stroke-width="3" stroke-dasharray="70 34" opacity="0.85" transform="rotate(-20 256 250)"/>
+  </g>
+  <!-- 方天畫戟 -->
+  <g transform="rotate(40 256 256)">
+    <rect x="249" y="128" width="14" height="344" rx="3" fill="#5a1a10" stroke="#2a0a06" stroke-width="2"/>
+    <rect x="245" y="176" width="22" height="9" fill="url(#gold)"/><rect x="245" y="440" width="22" height="9" fill="url(#gold)"/>
+    <polygon points="249,472 263,472 256,496" fill="#c8ccd6"/>
+    <path d="M246 166 L266 166 L280 214 L232 214 Z" fill="#c8201a"/>
+    <path d="M250 168 L246 212 M256 168 L256 214 M262 168 L266 212" stroke="#8a1010" stroke-width="2"/>
+    <rect x="243" y="128" width="26" height="12" rx="2" fill="url(#gold)"/>
+    <path d="M242 132 C 194 118, 180 166, 212 190 C 206 166, 216 148, 242 152 Z" fill="url(#steel)" stroke="#5a5e68" stroke-width="2"/>
+    <path d="M270 132 C 318 118, 332 166, 300 190 C 306 166, 296 148, 270 152 Z" fill="url(#steel)" stroke="#5a5e68" stroke-width="2"/>
+    <path d="M256 34 L276 92 L256 130 L236 92 Z" fill="url(#steel)" stroke="#5a5e68" stroke-width="2"/>
+    <path d="M256 44 L256 124" stroke="#ffffff" stroke-width="2" opacity="0.6"/>
+  </g>
+  <!-- 手槍（槍口朝左上，帶著穿越時的灼熱光） -->
+  <g transform="rotate(35 256 282)">
+    <g filter="url(#hot)" opacity="0.85">
+      <rect x="146" y="222" width="210" height="44" rx="8" fill="#ff8a30"/>
+      <polygon points="282,266 346,266 364,354 304,366" fill="#ff8a30"/>
+    </g>
+    <rect x="138" y="232" width="18" height="24" rx="3" fill="#2a2c32" stroke="#d4af37" stroke-width="3"/>
+    <rect x="150" y="222" width="204" height="42" rx="7" fill="url(#gun)" stroke="#d4af37" stroke-width="4"/>
+    <path d="M300 230 v26 M310 230 v26 M320 230 v26 M330 230 v26" stroke="#1a1c20" stroke-width="4"/>
+    <rect x="158" y="228" width="120" height="7" rx="3" fill="#ffffff" opacity="0.25"/>
+    <rect x="172" y="262" width="176" height="18" fill="#2e3036" stroke="#d4af37" stroke-width="3"/>
+    <path d="M236 280 L236 302 Q236 318 254 318 L272 318 L272 280" fill="none" stroke="#d4af37" stroke-width="6"/>
+    <path d="M256 280 L262 300" stroke="#c8ccd6" stroke-width="5" stroke-linecap="round"/>
+    <polygon points="280,278 346,278 364,360 304,372" fill="#24262c" stroke="#d4af37" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M298 296 L340 290 M302 314 L344 308 M306 332 L348 326 M310 350 L352 344" stroke="#3e4048" stroke-width="4"/>
+  </g>
+  <!-- 火星 -->
+  <g fill="#ffcf6a">
+    <circle cx="150" cy="140" r="4"/><circle cx="370" cy="372" r="5"/><circle cx="392" cy="150" r="3"/><circle cx="126" cy="352" r="3.5"/><circle cx="330" cy="118" r="2.5"/>
+  </g>
+</svg>
