@@ -46,6 +46,9 @@ const SOUNDS = {
   coin(v) { tone('triangle', 1600, 1600, 0.06, 0.15 * v); tone('triangle', 2100, 2100, 0.1, 0.15 * v, 0.06); },
   quest(v) { [293.66, 349.23, 440, 587.33].forEach((f, i) => tone('triangle', f, f, 0.5, 0.22 * v, i * 0.13)); },
   horn(v) { tone('sawtooth', 110, 112, 1.6, 0.25 * v); tone('sawtooth', 165, 166, 1.6, 0.14 * v, 0.1); },
+  siren(v) { for (let i = 0; i < 3; i++) { tone('sawtooth', 650, 950, 0.45, 0.07 * v, i * 0.9); tone('sawtooth', 950, 650, 0.45, 0.07 * v, i * 0.9 + 0.45); } },
+  whoosh(v) { noise(1.6, 0.6 * v, 'bandpass', 300, 3000); tone('sine', 80, 400, 1.5, 0.3 * v); },
+  hum(v) { tone('sine', 55, 55, 2.5, 0.12 * v); tone('sine', 82, 82, 2.5, 0.06 * v); },
   wolf(v) { tone('sine', 380, 620, 0.7, 0.14 * v); tone('sine', 620, 400, 0.8, 0.14 * v, 0.7); },
 };
 

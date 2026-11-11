@@ -27,6 +27,7 @@ export const ui = {
     $('btn-respawn').onclick = () => { G.player.respawn(); ui.close(); };
     $('btn-music').onclick = () => ui.msg(audio.toggleMusic() ? '配樂：開' : '配樂：關', 'info');
     $('btn-save').onclick = () => { G.save(); ui.msg('已存檔。', 'info'); };
+    $('btn-intro').onclick = () => G.replayIntro();
     document.querySelectorAll('[data-settings]').forEach(b => b.onclick = () => ui.openSettings());
     $('settings-back').onclick = () => ui.closeSettings();
     for (const [ch, a] of [['北', 0], ['東', -Math.PI / 2], ['南', Math.PI], ['西', Math.PI / 2]]) { // yaw：面向該方位時的鏡頭角

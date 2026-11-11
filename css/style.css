@@ -193,3 +193,19 @@ body.touch .seg button { padding: 4px 2px; min-height: 32px; font-size: 13px; }
 #menu-workshop .tabs { flex-wrap: wrap; } #ws-status { margin: -2px 0 6px; } .ws-note { color: #b8f0a0; margin: 4px 0 8px; font-size: 14px; }
 #ws-body h3 { margin: 12px 0 4px; } #ws-body .dim { margin: 4px 0; }
 body.touch #menu-workshop .tabs button { padding: 5px 8px; font-size: 13px; } body.touch #menu-workshop .ttl { font-size: 15px; }
+
+/* ---------- 開場動畫 ---------- */
+#intro { position: fixed; inset: 0; z-index: 26; pointer-events: none; }
+body.intro-on #hud, body.intro-on #touch, body.intro-on #rotate-hint { display: none !important; }
+#intro .bar { position: absolute; left: 0; right: 0; height: 11vh; background: #000; } #intro .top { top: 0; } #intro .bot { bottom: 0; }
+#intro-flash { position: absolute; inset: 0; opacity: 0; background: #000; }
+#intro-card { position: absolute; left: 0; right: 0; top: 36vh; text-align: center; opacity: 0; transition: opacity .8s; }
+#intro-card.show { opacity: 1; }
+#intro-card1 { font-size: clamp(30px, 8vh, 64px); color: #f4e2b0; letter-spacing: .2em; font-weight: bold; text-shadow: 0 0 24px rgba(0,0,0,.9), 0 3px 0 #3a1a10; }
+#intro-card2 { margin-top: 10px; font-size: clamp(14px, 3vh, 22px); color: #ffd24a; letter-spacing: .35em; text-shadow: 0 0 10px #000; }
+#intro-cap { position: absolute; left: 6vw; right: 6vw; bottom: 13vh; text-align: center; font-size: clamp(14px, min(3.3vh, 4.6vw), 26px); line-height: 1.6; color: #fff; text-shadow: 0 2px 6px #000, 0 0 2px #000; opacity: 0; transition: opacity .4s; min-height: 1.6em; }
+#intro-cap.show { opacity: 1; }
+#intro-bp .bp { position: absolute; font-family: "Courier New", monospace; font-size: clamp(13px, 2.6vh, 20px); color: #9ae8ff; border: 1px solid rgba(154,232,255,.6); background: rgba(10,30,60,.35); padding: 4px 10px; letter-spacing: .1em; text-shadow: 0 0 8px #3ab0ff; animation: bp 2.6s ease-out forwards; white-space: nowrap; }
+@keyframes bp { 0% { opacity: 0; transform: scale(1.6) translateY(20px); } 20% { opacity: 1; transform: none; } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(.9) translateY(-30px); } }
+#intro-eyes i { position: absolute; left: 0; right: 0; height: var(--e, 0); background: #000; } #intro-eyes i:first-child { top: 0; } #intro-eyes i:last-child { bottom: 0; }
+#intro-skip { position: absolute; right: 3vw; bottom: 3vh; font-size: 12px; color: #aaa; z-index: 2; }

@@ -391,6 +391,7 @@ export function initInput(canvas) {
   });
   canvas.addEventListener('mousedown', e => {
     if (G.menu === 'cutscene') { G.skipCutscene(); return; }
+    if (G.menu === 'intro') { G.skipIntro(); if (!G.touch && !G.noLock) lock(); return; } // 點擊跳過開場，並趁這次點擊鎖定滑鼠
     if (G.menu) return;
     audio.init();
     if (!G.noLock && !G.touch && document.pointerLockElement !== canvas) { lock(); return; }
@@ -402,6 +403,7 @@ export function initInput(canvas) {
   document.addEventListener('keydown', e => {
     if (e.code === 'Tab') e.preventDefault();
     if (G.menu === 'cutscene') { if (!e.repeat) G.skipCutscene(); return; }
+    if (G.menu === 'intro') { if (!e.repeat) G.skipIntro(); return; }
     if (G.menu) {
       if ((e.code === 'Escape' || e.code === 'Tab' || e.code === 'KeyC') && !e.repeat) G.ui.escape();
       return;
@@ -418,6 +420,7 @@ export function initInput(canvas) {
   const joy = document.getElementById('joy'), knob = document.getElementById('joyknob');
   const tstart = e => {
     if (G.menu === 'cutscene') { G.skipCutscene(); e.preventDefault(); return; }
+    if (G.menu === 'intro') { G.skipIntro(); e.preventDefault(); return; }
     if (G.menu) return; audio.init();
     for (const t of e.changedTouches) {
       const sl = t.target.closest && t.target.closest('[data-slot]');

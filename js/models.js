@@ -161,10 +161,15 @@ export function humanoid(look, weapon, weapon2, scale = 1) {
       b.push(bx(0.16, 0.18, 0.22, hc, 0, 1.9, -0.02));
       b.push(bx(0.4, 0.015, 0.02, hc, 0, 1.9, 0));
       break;
+    case 'short': // 現代短髮（開場動畫用）
+      b.push(bx(0.33, 0.09, 0.33, hair, 0, 1.8, 0));
+      break;
     default: // 髮髻
       b.push(bx(0.32, 0.06, 0.32, hair, 0, 1.8, 0));
       b.push(bx(0.11, 0.13, 0.11, hair, 0, 1.88, -0.03));
   }
+  if (look.glasses) b.push(bx(0.27, 0.06, 0.03, 0x0a0a0a, 0, 1.66, 0.155));
+  if (look.tie) { b.push(bx(0.16, 0.5, 0.02, 0xe8e8e8, 0, 1.2, look.fat ? 0.29 : 0.16)); b.push(bx(0.05, 0.4, 0.025, look.tie, 0, 1.18, look.fat ? 0.3 : 0.17)); }
   const bc = look.beardColor || hair;
   if (look.beard === 'long') { b.push(bx(0.22, 0.14, 0.06, bc, 0, 1.5, 0.16)); b.push(bx(0.16, 0.4, 0.05, bc, 0, 1.28, 0.2)); }
   else if (look.beard === 'bushy') { b.push(bx(0.34, 0.18, 0.1, bc, 0, 1.5, 0.13)); b.push(bx(0.06, 0.2, 0.3, bc, -0.16, 1.56, 0)); b.push(bx(0.06, 0.2, 0.3, bc, 0.16, 1.56, 0)); }

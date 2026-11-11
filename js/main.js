@@ -13,6 +13,7 @@ import { checkQuest } from './quests.js';
 import { spawnRecruit, giveAttendant, reslot, followers, cycleCommand } from './squad.js';
 import { syncChapters, updateChapters, restoreBurned, spawnEnemy } from './chapters.js';
 import { BM, loadBM, ending } from './blackmarket.js';
+import { playIntro, updateIntro, skipIntro } from './intro.js';
 import { rnd, rndInt, pick, dist2 } from './util.js';
 
 const PI = Math.PI, KEY = 'sanguo-arms-dealer-save-v1';
@@ -99,11 +100,15 @@ function start(save) {
   started = true; G.started = true; showRotateHint(G.touch && innerWidth < innerHeight);
   document.getElementById('hud').classList.remove('hidden');
   if (G.touch) document.getElementById('touch').classList.remove('hidden');
-  ui.close(); ui.dirty = true;
-  if (!save) {
-    ui.msg('……頭好痛。這裡是哪裡？手機沒有訊號，四周只有荒野。', 'say');
-    setTimeout(() => ui.msg('身旁有一只跟你一起掉下來的軍火箱，先打開看看。', 'say'), 3500);
-  } else ui.msg(`讀取進度：第 ${G.day} 日。`, 'info');
+  ui.close(); ui.dirty = true; // 在點擊「開始」的當下鎖定滑鼠
+  if (!save) playIntro(afterIntro); // 新遊戲先播開場動畫
+  else ui.msg(`讀取進度：第 ${G.day} 日。`, 'info');
+}
+function afterIntro() {
+  ui.dirty = true;
+  ui.msg('……頭好痛。這裡是哪裡？手機沒有訊號，四周只有荒野。', 'say');
+  setTimeout(() => ui.msg('身旁有一只跟你一起掉下來的軍火箱，先打開看看。', 'say'), 3500);
+  if (!G.touch && !document.pointerLockElement) ui.msg('點一下畫面，開始操控視角。', 'info');
 }
 
 // ------------------------------------------------------------------ 佈置角色
@@ -196,6 +201,9 @@ G.onKill = (a) => {
   }
 };
 G.cycleCommand = cycleCommand;
+G.skipIntro = skipIntro;
+// 暫停選單：重看開場動畫，看完回到遊戲
+G.replayIntro = () => { ui.close(); playIntro(() => ui.msg('回到亂世。', 'info')); };
 G.checkQuest = checkQuest;
 // 主線推進：生成新章節敵營；赤壁之後顯示結局
 G.onStage = done => {
@@ -418,10 +426,12 @@ function frame(t) {
     updateSky(dt, cam.position);
     ui.update(dt);
     adaptResolution(t);
+  } else if (G.menu === 'intro') {
+    updateIntro(dt);
   } else if (G.menu === 'cutscene') {
     updateCutscene(dt); updateSky(dt, cam.position);
   }
-  G.renderer.render(G.scene, cam);
+  G.renderer.render(G.renderScene || G.scene, cam);
 }
 
 window.__G = G;
