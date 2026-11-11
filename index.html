@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>回到三國：軍火商求生記</title>
+<link rel="stylesheet" href="./css/style.css">
+<script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud" class="hidden">
+  <div id="vignette"></div>
+  <div id="scope"></div>
+  <div id="cross"><i></i><i></i><i></i><i></i><b id="hit"></b></div>
+
+  <div id="topbar">
+    <div id="compass"><div id="compass-in"></div><div id="compass-mark">▼</div></div>
+    <div id="clock"></div>
+  </div>
+  <div id="quest"><div id="quest-t"></div><div id="quest-d"></div><div id="quest-dist"></div></div>
+  <canvas id="minimap" width="150" height="150"></canvas>
+  <div id="followers"></div>
+
+  <div id="boss" class="hidden"><div id="boss-name"></div><div class="bar"><div id="boss-fill"></div></div></div>
+  <div id="msgs"></div>
+  <div id="prompt" class="hidden"></div>
+
+  <div id="stats">
+    <div class="stat"><span>❤️</span><div class="bar"><div id="b-hp" class="fill hp"></div></div></div>
+    <div class="stat"><span>🍖</span><div class="bar"><div id="b-hunger" class="fill hunger"></div></div></div>
+    <div class="stat"><span>💧</span><div class="bar"><div id="b-thirst" class="fill thirst"></div></div></div>
+    <div class="stat"><span>⚡</span><div class="bar"><div id="b-stamina" class="fill stamina"></div></div></div>
+  </div>
+  <div id="hotbar"></div>
+  <div id="ammo"><div id="ammo-n"></div><div id="ammo-w"></div><div id="quick"></div></div>
+</div>
+
+<div id="touch" class="hidden">
+  <div id="joy"><div id="joyknob"></div></div>
+  <div class="tb" data-act="fire" id="t-fire">開火</div>
+  <div class="tb" data-act="jump" id="t-jump">跳</div>
+  <div class="tb" data-act="interact" id="t-e">互動</div>
+  <div class="tb" data-act="reload" id="t-r">換彈</div>
+  <div class="tb" data-act="next" id="t-next">武器</div>
+  <div class="tb" data-act="aim" id="t-aim">瞄準</div>
+  <div class="tb sm" data-act="grenade" id="t-g">💣</div>
+  <div class="tb sm" data-act="eat" id="t-f">🍖</div>
+  <div class="tb sm" data-act="drink" id="t-z">💧</div>
+  <div class="tb sm" data-act="heal" id="t-h">💊</div>
+  <div class="tb sm" data-act="whistle" id="t-x">🐴</div>
+  <div class="tb sm" data-act="menu" id="t-m">背包</div>
+  <div class="tb sm" data-act="pause" id="t-p">⏸</div>
+</div>
+
+<div id="fade"></div>
+
+<!-- 開始畫面 -->
+<div id="menu-start" class="menu">
+  <div class="panel wide">
+    <h1>回到三國</h1>
+    <h2>軍火商求生記</h2>
+    <p class="story">你是一名現代軍火商。一場離奇的爆炸將你捲入時空裂縫——<br>
+    醒來時，眼前已是<strong>東漢末年</strong>：黃巾四起、董卓亂政、群雄並立。<br>
+    你身上只有一把<strong>備彈無限的手槍</strong>，以及腦中<strong>熱兵器與彈藥製作</strong>的全部知識。<br>
+    在這冷兵器的亂世，活下去。</p>
+    <div class="cols">
+      <div><h3>鍵盤滑鼠</h3>
+        <p><kbd>W A S D</kbd> 移動　<kbd>Shift</kbd> 奔跑　<kbd>空白</kbd> 跳躍<br>
+        <kbd>滑鼠左鍵</kbd> 攻擊　<kbd>右鍵</kbd> 瞄準　<kbd>R</kbd> 換彈<br>
+        <kbd>1–7</kbd>／<kbd>滾輪</kbd> 切換兵器　<kbd>G</kbd> 震天雷<br>
+        <kbd>E</kbd> 互動／採集／上下馬　<kbd>X</kbd> 吹哨喚馬<br>
+        <kbd>F</kbd> 進食　<kbd>Z</kbd> 喝水　<kbd>H</kbd> 金瘡藥<br>
+        <kbd>Tab</kbd> 背包／製作／地圖　<kbd>M</kbd> 配樂　<kbd>Esc</kbd> 暫停</p></div>
+      <div><h3>求生要訣</h3>
+        <p>・先打開身旁的<strong>軍火箱</strong>，再往東南找<strong>劉備軍營</strong><br>
+        ・採集<strong>硝石、硫磺、木炭</strong>調配黑火藥<br>
+        ・製作<strong>霰彈槍、步槍、震天雷</strong>對抗名將<br>
+        ・注意飽食與水分；夜裡有狼群與賊兵夜襲<br>
+        ・可邀<strong>關羽、張飛、趙雲</strong>等名將同行</p></div>
+    </div>
+    <div class="btns">
+      <button id="btn-continue" class="hidden">繼續遊戲</button>
+      <button id="btn-new">開始新遊戲</button>
+    </div>
+    <p id="loading" class="dim">載入中……</p>
+  </div>
+</div>
+
+<div id="menu-pause" class="menu hidden">
+  <div class="panel">
+    <h2>暫停</h2>
+    <p class="dim">進度會自動儲存於此瀏覽器。</p>
+    <div class="btns col"><button data-close>繼續遊戲</button><button id="btn-save">立即存檔</button><button id="btn-music">切換配樂</button></div>
+  </div>
+</div>
+
+<div id="menu-inv" class="menu hidden">
+  <div class="panel wide tall">
+    <div class="tabs"><button data-tab="craft" class="on">🔧 製作</button><button data-tab="bag">🎒 背包</button><button data-tab="map">🗺️ 地圖</button><button data-close class="x">✕</button></div>
+    <div id="tab-craft" class="tab"></div>
+    <div id="tab-bag" class="tab hidden"></div>
+    <div id="tab-map" class="tab hidden"><canvas id="bigmap" width="520" height="520"></canvas></div>
+  </div>
+</div>
+
+<div id="menu-dialog" class="menu hidden low">
+  <div class="panel dialog"><div id="dlg-name"></div><div id="dlg-title"></div><p id="dlg-text"></p><div id="dlg-opts" class="btns col"></div></div>
+</div>
+
+<div id="menu-shop" class="menu hidden">
+  <div class="panel wide tall">
+    <div class="tabs"><span class="ttl">糜竺的商攤</span><span id="shop-coin"></span><button data-close class="x">✕</button></div>
+    <div class="cols shop"><div><h3>購買</h3><div id="shop-buy"></div></div><div><h3>出售（軍火最值錢）</h3><div id="shop-sell"></div></div></div>
+  </div>
+</div>
+
+<div id="menu-dead" class="menu hidden red">
+  <div class="panel"><h2>你倒下了</h2><p id="dead-text"></p><div class="btns col"><button id="btn-respawn">重新振作</button></div></div>
+</div>
+
+<div id="menu-win" class="menu hidden">
+  <div class="panel wide"><h1>國賊伏誅</h1>
+    <p class="story">董卓已死，郿塢的火光映紅了半邊天。<br>史書不會記載一個來歷不明的「軍火商」，<br>但劉備、曹操、孫堅都記得——那個手持雷霆之器的異人。<br><br>天下三分的時代才正要開始，而你的生意，也才正要開始。</p>
+    <div class="btns"><button data-close>繼續在亂世中求生</button></div></div>
+</div>
+
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>
