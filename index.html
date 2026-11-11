@@ -2,12 +2,15 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a140e">
 <title>回到三國：軍火商求生記</title>
 <link rel="stylesheet" href="./css/style.css">
 <script type="importmap">{ "imports": { "three": "./vendor/three.module.min.js" } }</script>
 </head>
-<body>
+<body class="menu-open">
 <canvas id="game"></canvas>
 
 <div id="hud" class="hidden">
@@ -19,13 +22,13 @@
     <div id="compass"><div id="compass-in"></div><div id="compass-mark">▼</div></div>
     <div id="clock"></div>
   </div>
-  <div id="quest"><div id="quest-t"></div><div id="quest-d"></div><div id="quest-dist"></div></div>
+  <div id="quest" data-act="quest"><div id="quest-t"></div><div id="quest-d"></div><div id="quest-dist"></div></div>
   <canvas id="minimap" width="150" height="150"></canvas>
   <div id="followers"></div>
 
   <div id="boss" class="hidden"><div id="boss-name"></div><div class="bar"><div id="boss-fill"></div></div></div>
   <div id="msgs"></div>
-  <div id="prompt" class="hidden"></div>
+  <div id="prompt" class="hidden" data-act="interact"></div>
 
   <div id="stats">
     <div class="stat"><span>❤️</span><div class="bar"><div id="b-hp" class="fill hp"></div></div></div>
@@ -40,23 +43,24 @@
 <div id="touch" class="hidden">
   <div id="joy"><div id="joyknob"></div></div>
   <div class="tb" data-act="fire" id="t-fire">開火</div>
-  <div class="tb" data-act="jump" id="t-jump">跳</div>
-  <div class="tb" data-act="interact" id="t-e">互動</div>
-  <div class="tb" data-act="reload" id="t-r">換彈</div>
-  <div class="tb" data-act="next" id="t-next">武器</div>
   <div class="tb" data-act="aim" id="t-aim">瞄準</div>
-  <div class="tb sm" data-act="grenade" id="t-g">💣</div>
-  <div class="tb sm" data-act="eat" id="t-f">🍖</div>
-  <div class="tb sm" data-act="drink" id="t-z">💧</div>
-  <div class="tb sm" data-act="heal" id="t-h">💊</div>
-  <div class="tb sm" data-act="whistle" id="t-x">🐴</div>
-  <div class="tb sm" data-act="menu" id="t-m">背包</div>
+  <div class="tb" data-act="jump" id="t-jump">跳躍</div>
+  <div class="tb" data-act="reload" id="t-r">換彈</div>
+  <div id="t-quick">
+    <div class="tb sm" data-act="eat">🍖<b id="q-food"></b></div>
+    <div class="tb sm" data-act="drink">💧<b id="q-water"></b></div>
+    <div class="tb sm" data-act="heal">💊<b id="q-med"></b></div>
+    <div class="tb sm" data-act="grenade">💣<b id="q-gren"></b></div>
+    <div class="tb sm" data-act="whistle">🐴</div>
+  </div>
+  <div class="tb sm" data-act="menu" id="t-m">🎒</div>
   <div class="tb sm" data-act="pause" id="t-p">⏸</div>
 </div>
 
 <div id="fade"></div>
 
 <!-- 開始畫面 -->
+<div id="rotate-hint" class="hidden">📱↻　橫向握持手機，視野更寬、操作更順手</div>
 <div id="menu-start" class="menu">
   <div class="panel wide">
     <h1>回到三國</h1>
@@ -66,13 +70,20 @@
     你身上只有一把<strong>備彈無限的手槍</strong>，以及腦中<strong>熱兵器與彈藥製作</strong>的全部知識。<br>
     在這冷兵器的亂世，活下去。</p>
     <div class="cols">
-      <div><h3>鍵盤滑鼠</h3>
+      <div class="kb-only"><h3>鍵盤滑鼠</h3>
         <p><kbd>W A S D</kbd> 移動　<kbd>Shift</kbd> 奔跑　<kbd>空白</kbd> 跳躍<br>
         <kbd>滑鼠左鍵</kbd> 攻擊　<kbd>右鍵</kbd> 瞄準　<kbd>R</kbd> 換彈<br>
         <kbd>1–7</kbd>／<kbd>滾輪</kbd> 切換兵器　<kbd>G</kbd> 震天雷<br>
         <kbd>E</kbd> 互動／採集／上下馬　<kbd>X</kbd> 吹哨喚馬<br>
         <kbd>F</kbd> 進食　<kbd>Z</kbd> 喝水　<kbd>H</kbd> 金瘡藥<br>
         <kbd>Tab</kbd> 背包／製作／地圖　<kbd>M</kbd> 配樂　<kbd>Esc</kbd> 暫停</p></div>
+      <div class="touch-only"><h3>觸控操作</h3>
+        <p>・<strong>左半螢幕</strong>拖曳移動，推到底即奔跑<br>
+        ・<strong>右半螢幕</strong>拖曳轉動視角<br>
+        ・按住<strong>開火</strong>可邊射擊邊拖曳瞄準<br>
+        ・點<strong>下方兵器列</strong>切換兵器，🍖💧💊💣🐴 為快捷道具<br>
+        ・出現<strong>金框提示</strong>時點它即可互動（採集、交談、上下馬）<br>
+        ・🎒 開啟製作／背包／地圖；點左上任務可展開說明</p></div>
       <div><h3>求生要訣</h3>
         <p>・先打開身旁的<strong>軍火箱</strong>，再往東南找<strong>劉備軍營</strong><br>
         ・採集<strong>硝石、硫磺、木炭</strong>調配黑火藥<br>

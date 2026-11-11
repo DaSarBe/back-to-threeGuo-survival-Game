@@ -9,7 +9,7 @@ import { clamp, lerp, rnd, turnTo, dist2 } from './util.js';
 
 const PI = Math.PI;
 const keys = {}, mouse = { l: false, r: false };
-const touch = { mx: 0, mz: 0, fire: false, joyId: null, lookId: null, jx: 0, jy: 0, lx: 0, ly: 0 };
+const touch = { mx: 0, mz: 0, fire: false, joyId: null, lookId: null, fireId: null, jx: 0, jy: 0, lx: 0, ly: 0 };
 const V = new THREE.Vector3(), D = new THREE.Vector3(), O = new THREE.Vector3(), T = new THREE.Vector3();
 let jumpQ = false, eCd = 0, interact = null, interactT = 0, vmCur = null, flashT = 0, muzzle;
 const vms = {};
@@ -30,7 +30,7 @@ export const player = {
   take(it, n = 1) { if ((this.inv[it] || 0) < n) return false; this.inv[it] -= n; G.ui.dirty = true; return true; },
   giveWeapon(id) {
     if (this.owned[id]) return;
-    this.owned[id] = true; G.ui.msg(`獲得兵器：${WEAPONS[id].i} ${WEAPONS[id].n}（按 ${HOTBAR.indexOf(id) + 1} 切換）`, 'quest'); G.ui.dirty = true;
+    this.owned[id] = true; G.ui.msg(`獲得兵器：${WEAPONS[id].i} ${WEAPONS[id].n}（${G.touch ? '點下方兵器列' : '按 ' + (HOTBAR.indexOf(id) + 1) + ' '}切換）`, 'quest'); G.ui.dirty = true;
   },
   equip(id) {
     if (!this.owned[id] || this.cur === id) return;
@@ -45,7 +45,7 @@ export const player = {
   damage(n, src) {
     if (!this.alive || G.menu) return;
     n *= (1 - this.armor); this.hp -= n; this.hurtT = 6;
-    G.ui.hurt(n); audio.play('hurt', 0.8); this.shake = Math.max(this.shake, 0.12);
+    G.ui.hurt(n); audio.play('hurt', 0.8); if (G.touch && navigator.vibrate) { try { navigator.vibrate(25); } catch (e) { } } this.shake = Math.max(this.shake, 0.12);
     if (this.hp <= 0) {
       this.hp = 0; this.alive = false; if (this.mount) this.dismount();
       G.ui.deathBy(src && src.name ? src.name : null);
@@ -96,7 +96,7 @@ export const player = {
   mountHorse(h) {
     if (!h.tamed) { h.tame(); G.ui.msg(`你馴服了這匹${h.name}！`, 'get'); }
     this.mount = h; this.horse = h; h.rider = true; h.state = 'idle'; h.dir = null;
-    h.speed = 0; audio.play('neigh', 0.7); G.ui.msg('已上馬：W 前進、Shift 奔馳、E 下馬、X 可吹哨喚馬。', 'info');
+    h.speed = 0; audio.play('neigh', 0.7); G.ui.msg(G.touch ? '已上馬：搖桿推到底即奔馳，點「下馬」提示可下馬，🐴 可吹哨喚馬。' : '已上馬：W 前進、Shift 奔馳、E 下馬、X 可吹哨喚馬。', 'info');
   },
   dismount() {
     const h = this.mount; if (!h) return;
@@ -191,7 +191,7 @@ function findInteract() {
   return best;
 }
 function drinkWater() {
-  player.thirst = 100; player.canteen = 3; audio.play('drink'); G.ui.msg('你喝飽了水，並裝滿了水囊（按 Z 飲用）。', 'info'); G.ui.dirty = true;
+  player.thirst = 100; player.canteen = 3; audio.play('drink'); G.ui.msg(`你喝飽了水，並裝滿了水囊（${G.touch ? '點 💧' : '按 Z '}飲用）。`, 'info'); G.ui.dirty = true;
 }
 function gather(n) {
   const P = player;
@@ -286,7 +286,7 @@ export function updatePlayer(dt) {
   const bobY = P.mount ? Math.abs(Math.sin(P.mount.ph)) * 0.09 * clamp(P.mount.speed / 8, 0, 1) : Math.sin(P.bob * 2) * 0.035 * clamp(P.speedNow / 5, 0, 1);
   cam.position.set(P.pos.x + rnd(-1, 1) * P.shake, P.pos.y + P.eyeH + bobY + rnd(-1, 1) * P.shake, P.pos.z + rnd(-1, 1) * P.shake);
   cam.rotation.set(P.pitch + P.recoil, P.yaw, 0);
-  const fov = lerp(74, w.fov || 74, P.aim) + (P.sprinting ? 4 : 0);
+  const bf = G.baseFov || 74, fov = lerp(bf, w.fov ? w.fov * bf / 74 : bf, P.aim) + (P.sprinting ? 4 : 0);
   if (Math.abs(cam.fov - fov) > 0.05) { cam.fov = lerp(cam.fov, fov, Math.min(1, dt * 14)); cam.updateProjectionMatrix(); }
 
   updateViewModel(dt, w);
@@ -305,9 +305,9 @@ function updateViewModel(dt, w) {
   if (w.type === 'gun') {
     const a = P.aim, rl = P.reloadT > 0 ? Math.sin(Math.min(1, (w.reload - P.reloadT) / w.reload) * PI) : 0;
     const adsY = P.cur === 'pistol' ? -0.062 : P.cur === 'shotgun' ? -0.07 : -0.1;
-    m.position.set(lerp(0.23, 0, a) + sway, lerp(-0.21, adsY, a) - rl * 0.18 + Math.abs(sway) * 0.5, lerp(-0.62, -0.5, a) + P.recoil * 0.9);
+    m.position.set(lerp(0.23 * (G.vmK || 1), 0, a) + sway, lerp(-0.21, adsY, a) - rl * 0.18 + Math.abs(sway) * 0.5, lerp(-0.62, -0.5, a) + P.recoil * 0.9);
     m.rotation.set(P.recoil * 2.2 - rl * 0.9, 0, rl * 0.3);
-    m.scale.setScalar(0.8);
+    m.scale.setScalar(0.8 * (G.vmK || 1));
     m.visible = !(w.scope && a > 0.85);
     G.ui.scope(w.scope && a > 0.85);
     muzzle.position.set(m.position.x, m.position.y + 0.02, m.position.z - (P.cur === 'pistol' ? 0.22 : 0.9));
@@ -369,11 +369,15 @@ export function initInput(canvas) {
   const tstart = e => {
     if (G.menu) return; audio.init();
     for (const t of e.changedTouches) {
+      const sl = t.target.closest && t.target.closest('[data-slot]');
+      if (sl) { P.equip(sl.dataset.slot); continue; }
       const el = t.target.closest && t.target.closest('[data-act]');
       if (el) {
         const a = el.dataset.act;
         if (a === 'fire') { touch.fire = true; touch.fireId = t.identifier; touch.lx = t.clientX; touch.ly = t.clientY; }
-        else if (a === 'aim') mouse.r = !mouse.r; else act(a);
+        else if (a === 'aim') { mouse.r = !mouse.r; el.classList.toggle('on', mouse.r); }
+        else if (a === 'quest') el.classList.toggle('open');
+        else act(a);
         continue;
       }
       if (t.clientX < innerWidth * 0.4 && touch.joyId === null) {
@@ -403,11 +407,10 @@ export function initInput(canvas) {
       if (t.identifier === touch.fireId) { touch.fireId = null; touch.fire = false; }
     }
   };
-  const layer = document.getElementById('touch');
-  for (const el of [canvas, layer]) {
-    el.addEventListener('touchstart', tstart, { passive: false }); el.addEventListener('touchmove', tmove, { passive: false });
-    el.addEventListener('touchend', tend); el.addEventListener('touchcancel', tend);
-  }
+  // 掛在 document：HUD 上的兵器列、任務框、互動提示都能直接點
+  document.addEventListener('touchstart', tstart, { passive: false }); document.addEventListener('touchmove', e => { if (!G.menu) tmove(e); }, { passive: false });
+  document.addEventListener('touchend', tend); document.addEventListener('touchcancel', tend);
+  document.addEventListener('gesturestart', e => e.preventDefault());
 }
 function act(a) {
   const P = player; if (!a) return;
@@ -426,4 +429,8 @@ function act(a) {
     case 'music': G.ui.msg(audio.toggleMusic() ? '配樂：開' : '配樂：關', 'info'); break;
   }
 }
-export function resetInput() { for (const k in keys) keys[k] = false; mouse.l = mouse.r = false; touch.fire = false; touch.mx = touch.mz = 0; }
+export function resetInput() {
+  for (const k in keys) keys[k] = false; mouse.l = mouse.r = false; touch.fire = false; touch.mx = touch.mz = 0;
+  touch.joyId = touch.lookId = touch.fireId = null;
+  const j = document.getElementById('joy'), a = document.getElementById('t-aim'); if (j) j.style.display = 'none'; if (a) a.classList.remove('on');
+}

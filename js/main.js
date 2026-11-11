@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { G } from './state.js';
 import { world, buildWorld, updateSky, updateNodes, heightAt, inSite, SITES } from './world.js';
 import { player, updatePlayer, initInput } from './player.js';
-import { Actor, Animal, updateProjectiles, updatePickups, updateEffects } from './entities.js';
+import { Actor, Animal, updateProjectiles, updatePickups, updateEffects, initFx } from './entities.js';
 import { ui } from './ui.js';
 import { audio } from './audio.js';
 import { checkQuest } from './quests.js';
@@ -10,22 +10,31 @@ import { rnd, rndInt, pick, dist2 } from './util.js';
 
 const PI = Math.PI, KEY = 'sanguo-arms-dealer-save-v1';
 const canvas = document.getElementById('game');
-let lastT = 0, started = false;
+let lastT = 0, started = false, basePR = 1, resScale = 1, fpsN = 0, fpsT = 0, resHold = 0;
 const timers = { patrol: 40, wolf: 20, sec: 1, save: 45, deer: 10 };
 const camps = [];
 
 // ------------------------------------------------------------------ 初始化
 function init() {
   G.touch = 'ontouchstart' in window && matchMedia('(pointer: coarse)').matches;
+  if (G.touch) document.body.classList.add('touch');
   const renderer = G.renderer = new THREE.WebGLRenderer({ canvas, antialias: !G.touch, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio || 1, G.touch ? 1.5 : 2));
+  basePR = Math.min(devicePixelRatio || 1, G.touch ? 1.5 : 2); renderer.setPixelRatio(basePR);
   renderer.shadowMap.enabled = !G.touch; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const scene = G.scene = new THREE.Scene();
   const camera = G.camera = new THREE.PerspectiveCamera(74, 1, 0.08, 2400); camera.rotation.order = 'YXZ'; scene.add(camera);
   G.world = world; G.player = player; G.ui = ui;
-  buildWorld(scene); ui.init(); initInput(canvas);
-  const resize = () => { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); };
-  addEventListener('resize', resize); resize();
+  buildWorld(scene); initFx(scene); ui.init(); initInput(canvas);
+  const resize = () => {
+    const w = innerWidth, h = innerHeight, asp = w / h;
+    renderer.setSize(w, h, false); camera.aspect = asp;
+    // 直向螢幕時加大垂直視角，維持足夠的水平視野
+    G.baseFov = asp >= 1.3 ? 74 : Math.min(100, 74 + (1.3 - asp) * 38);
+    if (!started) camera.fov = G.baseFov; camera.updateProjectionMatrix();
+    G.vmK = Math.max(0.5, Math.min(1, asp / 1.4));
+    showRotateHint(G.touch && asp < 1);
+  };
+  addEventListener('resize', resize); addEventListener('orientationchange', () => setTimeout(resize, 250)); resize();
 
   let save = null;
   try { save = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { }
@@ -36,8 +45,24 @@ function init() {
   requestAnimationFrame(frame);
 }
 
+// 直向時提示橫放；遊戲中只顯示幾秒，不遮擋畫面
+let hintTimer = 0;
+function showRotateHint(on) {
+  const h = document.getElementById('rotate-hint'); clearTimeout(hintTimer);
+  h.classList.toggle('hidden', !on);
+  if (on && started) hintTimer = setTimeout(() => h.classList.add('hidden'), 4000);
+}
+
 function start(save) {
   audio.init();
+  if (G.touch) { // 手機：嘗試全螢幕並鎖定橫向（不支援的瀏覽器會自動略過）
+    try {
+      const el = document.documentElement, rf = el.requestFullscreen || el.webkitRequestFullscreen;
+      const p = rf ? rf.call(el, { navigationUI: 'hide' }) : null;
+      const lockLand = () => { try { const o = screen.orientation; if (o && o.lock) o.lock('landscape').catch(() => { }); } catch (e) { } };
+      if (p && p.then) p.then(lockLand).catch(() => { }); else lockLand();
+    } catch (e) { }
+  }
   const P = player, s = SITES.spawn;
   P.pos.set(s.x, heightAt(s.x, s.z + 2), s.z + 2); P.yaw = Math.atan2(-50, -80);
   if (save) {
@@ -50,9 +75,9 @@ function start(save) {
   if (save && save.p.horse) { const h = spawnHorse(P.pos.x + 3, P.pos.z + 2, save.p.horse === 'red'); h.tame(); P.horse = h; }
   if (G.flags.crate) for (const n of world.nodeList) if (n.kind === 'crate') n.stock = 0;
   if (G.flags.redHare && !(save && save.p.horse === 'red')) G.spawnRedHare();
-  started = true; G.started = true;
+  started = true; G.started = true; showRotateHint(G.touch && innerWidth < innerHeight);
   document.getElementById('hud').classList.remove('hidden');
-  if (G.touch) { document.getElementById('touch').classList.remove('hidden'); document.body.classList.add('touch'); }
+  if (G.touch) document.getElementById('touch').classList.remove('hidden');
   ui.close(); ui.dirty = true;
   if (!save) {
     ui.msg('……頭好痛。這裡是哪裡？手機沒有訊號，四周只有荒野。', 'say');
@@ -214,6 +239,17 @@ function separate() {
   }
 }
 
+// 動態解析度：掉幀時自動降低渲染解析度，流暢後再慢慢調回
+function adaptResolution(t) {
+  fpsN++; if (!fpsT) fpsT = t;
+  if (t - fpsT < 1500) return;
+  const fps = fpsN * 1000 / (t - fpsT); fpsN = 0; fpsT = t; resHold--;
+  let s = resScale;
+  if (fps < 40 && s > 0.55) { s = Math.max(0.55, s - 0.15); resHold = 8; }
+  else if (fps > 57 && s < 1 && resHold <= 0) s = Math.min(1, s + 0.1);
+  if (s !== resScale) { resScale = s; G.renderer.setPixelRatio(basePR * s); G.renderer.setSize(innerWidth, innerHeight, false); }
+}
+
 // ------------------------------------------------------------------ 主迴圈
 function frame(t) {
   requestAnimationFrame(frame);
@@ -233,6 +269,7 @@ function frame(t) {
     updateProjectiles(dt); updatePickups(dt); updateEffects(dt); updateNodes(dt);
     updateSky(dt, cam.position);
     ui.update(dt);
+    adaptResolution(t);
   }
   G.renderer.render(G.scene, cam);
 }

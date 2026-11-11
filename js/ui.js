@@ -31,13 +31,13 @@ export const ui = {
   open(name) {
     if (G.menu === name) return;
     for (const m of MENUS) $('menu-' + m).classList.toggle('hidden', m !== name);
-    G.menu = name; resetInput(); G.unlockPointer && G.unlockPointer();
+    G.menu = name; resetInput(); G.unlockPointer && G.unlockPointer(); document.body.classList.add('menu-open');
     if (name === 'inv') this.tab(this.curTab || 'craft');
     if (name === 'shop') this.renderShop();
   },
   close() {
     for (const m of MENUS) $('menu-' + m).classList.add('hidden');
-    G.menu = null; G.lockPointer && G.lockPointer();
+    G.menu = null; G.lockPointer && G.lockPointer(); document.body.classList.remove('menu-open');
   },
   escape() { if (['pause', 'inv', 'shop', 'dialog', 'win'].includes(G.menu)) this.close(); },
   tab(t) {
@@ -53,7 +53,8 @@ export const ui = {
       let ok = !owned;
       const need = Object.entries(r.need).map(([it, n]) => { const have = P.count(it); if (have < n) ok = false; return `<span class="${have < n ? 'lack' : ''}">${ITEMS[it].i}${ITEMS[it].n} ${have}/${n}</span>`; }).join('　');
       const row = document.createElement('div'); row.className = 'row';
-      row.innerHTML = `<div class="nm"><b>${r.n}</b><span>${r.d}</span><div class="need">${need}</div></div>`;
+      const desc = G.touch ? r.d.replace('按 G ', '點 💣 ').replace('按 H ', '點 💊 ') : r.d;
+      row.innerHTML = `<div class="nm"><b>${r.n}</b><span>${desc}</span><div class="need">${need}</div></div>`;
       const b = document.createElement('button'); b.textContent = owned ? '已擁有' : '製作'; b.disabled = !ok;
       b.onclick = () => {
         for (const [it, n] of Object.entries(r.need)) P.take(it, n);
@@ -142,7 +143,7 @@ export const ui = {
   // ---------- 即時訊息 ----------
   msg(text, cls = 'info') {
     const d = document.createElement('div'); d.className = cls; d.textContent = text; el.msgs.appendChild(d);
-    while (el.msgs.children.length > 6) el.msgs.firstChild.remove();
+    while (el.msgs.children.length > (G.touch ? 3 : 6)) el.msgs.firstChild.remove();
     setTimeout(() => { d.style.opacity = 0; setTimeout(() => d.remove(), 700); }, cls === 'quest' || cls === 'say' ? 8000 : 4500);
   },
   prompt(label) {
@@ -171,10 +172,11 @@ export const ui = {
     if (this.dirty || P.reloadT > 0 !== last.rl) {
       this.dirty = false; last.rl = P.reloadT > 0;
       const w = WEAPONS[P.cur];
-      el.hotbar.innerHTML = HOTBAR.map((id, i) => `<div class="slot ${P.cur === id ? 'on' : ''} ${P.owned[id] ? '' : 'no'}"><small>${i + 1}</small>${WEAPONS[id].i}<em>${P.owned[id] ? WEAPONS[id].n : ''}</em></div>`).join('');
+      el.hotbar.innerHTML = HOTBAR.map((id, i) => G.touch && !P.owned[id] ? '' : `<div class="slot ${P.cur === id ? 'on' : ''} ${P.owned[id] ? '' : 'no'}" data-slot="${id}"><small>${i + 1}</small>${WEAPONS[id].i}<em>${P.owned[id] ? WEAPONS[id].n : ''}</em></div>`).join('');
       el['ammo-w'].textContent = w.n + (P.reloadT > 0 ? '　換彈中…' : '');
       el['ammo-n'].innerHTML = w.type === 'gun' ? `${P.mags[P.cur]} <small>/ ${w.ammo ? P.count(w.ammo) : '∞'}</small>` : w.type === 'bow' ? `${P.count('arrow')} <small>箭</small>` : '';
       const food = P.count('cooked') + P.count('ration') + P.count('berry') + P.count('meat');
+      if (G.touch) { $('q-food').textContent = food; $('q-water').textContent = P.canteen; $('q-med').textContent = P.count('medicine'); $('q-gren').textContent = P.count('grenade'); }
       el.quick.innerHTML = `💣 ${P.count('grenade')} <kbd>G</kbd>　🍖 ${food} <kbd>F</kbd><br>💧 ${P.canteen}/3 <kbd>Z</kbd>　💊 ${P.count('medicine')} <kbd>H</kbd><br>🪙 ${P.count('coin')}`;
     }
 

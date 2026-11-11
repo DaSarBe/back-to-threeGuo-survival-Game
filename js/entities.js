@@ -479,12 +479,16 @@ export function fxBurst(pos, color, n, speed, life, size = 0.14) {
     }
   });
 }
-let flashLights = 0;
+// 閃光用固定的光源池：光源數量不變，戰鬥中就不會觸發著色器重新編譯而卡頓
+const flashPool = [];
+export function initFx(scene) {
+  for (let i = 0; i < (G.touch ? 1 : 2); i++) { const l = new THREE.PointLight(0xffffff, 0, 60, 1.6); l.userData.busy = false; scene.add(l); flashPool.push(l); }
+}
 export function fxFlash(pos, color, intensity, life) {
-  if (flashLights >= 3) return;
-  const l = new THREE.PointLight(color, intensity, 60, 1.6); l.position.copy(pos); l.position.y += 1.5; G.scene.add(l); flashLights++;
+  const l = flashPool.find(x => !x.userData.busy); if (!l) return;
+  l.userData.busy = true; l.color.set(color); l.position.copy(pos); l.position.y += 1.5;
   let t = 0;
-  G.effects.push({ update(dt) { t += dt; l.intensity = intensity * Math.max(0, 1 - t / life); if (t > life) { G.scene.remove(l); l.dispose(); flashLights--; return false; } return true; } });
+  G.effects.push({ update(dt) { t += dt; l.intensity = intensity * Math.max(0, 1 - t / life); if (t > life) { l.intensity = 0; l.userData.busy = false; return false; } return true; } });
 }
 const fbGeo = new THREE.IcosahedronGeometry(1, 2);
 export function fxFireball(pos, r) {

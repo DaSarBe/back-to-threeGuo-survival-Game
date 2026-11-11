@@ -232,7 +232,7 @@ export function updateSky(dt, camPos) {
   skyMat.uniforms.top.value.copy(cTopN).lerp(cTopD, dayF);
   const bot = skyMat.uniforms.bot.value.copy(cBotN).lerp(cBotD, dayF).lerp(cDusk, dusk * smoothstep(-0.3, 0, sh));
   G.scene.fog.color.copy(bot);
-  G.scene.fog.near = lerp(45, 90, dayF); G.scene.fog.far = lerp(300, 560, dayF);
+  G.scene.fog.near = lerp(45, 90, dayF); G.scene.fog.far = lerp(300, 560, dayF) * (G.touch ? 0.8 : 1);
   sky.position.copy(camPos); stars.position.copy(camPos);
   stars.material.opacity = 1 - dayF;
   hemi.intensity = lerp(0.42, 1.15, dayF);
@@ -243,7 +243,7 @@ export function updateSky(dt, camPos) {
   sunDisc.position.copy(camPos).addScaledVector(sunDir, 900); sunDisc.lookAt(camPos);
   moonDisc.position.copy(camPos).addScaledVector(sunDir, -900); moonDisc.lookAt(camPos);
   const t = G.now;
-  for (const f of world.fires) { f.light.intensity = f.base * (0.85 + 0.25 * Math.sin(t * 11 + f.ph) * Math.sin(t * 7.3)); f.flame.scale.y = 1 + 0.25 * Math.sin(t * 13 + f.ph); }
+  for (const f of world.fires) { if (f.light) f.light.intensity = f.base * (0.85 + 0.25 * Math.sin(t * 11 + f.ph) * Math.sin(t * 7.3)); f.flame.scale.y = 1 + 0.25 * Math.sin(t * 13 + f.ph); }
   for (const f of world.flags) f.rotation.y = f.userData.ry + Math.sin(t * 1.6 + f.userData.ph) * 0.25;
   if (world.portal) { world.portal.rotation.z += dt * 0.8; world.portal.material.opacity = 0.55 + 0.25 * Math.sin(t * 3); }
 }
@@ -355,7 +355,8 @@ function campfire(scene, x, z, big = false) {
   addStatic(scene, p, x, y, z, 0, false);
   const flame = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.3, 6), new THREE.MeshBasicMaterial({ color: 0xffa030, transparent: true, opacity: 0.9, fog: false }));
   flame.position.set(x, y + 0.85, z); scene.add(flame);
-  const light = new THREE.PointLight(0xff8a3a, 50, 34, 1.8); light.position.set(x, y + 1.6, z); scene.add(light);
+  let light = null; // 手機上只保留大營火的光源，減少每個頂點的光照計算
+  if (!G.touch || big) { light = new THREE.PointLight(0xff8a3a, 50, 34, 1.8); light.position.set(x, y + 1.6, z); scene.add(light); }
   world.fires.push({ light, flame, base: big ? 90 : 50, ph: x });
   world.addCircle(x, z, 0.8, 1);
 }
@@ -442,7 +443,7 @@ function buildSites(scene) {
     const s = S.spawn, y = s.y;
     const ring = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.12, 8, 32), new THREE.MeshBasicMaterial({ color: 0x60c8ff, transparent: true, opacity: 0.7, fog: false }));
     ring.position.set(s.x - 5, y + 2.6, s.z - 4); scene.add(ring); world.portal = ring;
-    const pl = new THREE.PointLight(0x60c8ff, 30, 20); pl.position.copy(ring.position); scene.add(pl);
+    if (!G.touch) { const pl = new THREE.PointLight(0x60c8ff, 30, 20); pl.position.copy(ring.position); scene.add(pl); }
     addStatic(scene, [bx(1.3, 0.8, 0.8, 0x3a4a2a, 0, 0.4, 0), bx(1.34, 0.08, 0.84, 0x2a3a1a, 0, 0.82, 0), bx(0.5, 0.25, 0.02, 0xd8d8d0, 0, 0.45, 0.41)], s.x + 3, y, s.z - 3, 0.4);
     world.addCircle(s.x + 3, s.z - 3, 0.8, 1);
     world.addNode({ kind: 'crate', x: s.x + 3, z: s.z - 3, stock: 1 });
