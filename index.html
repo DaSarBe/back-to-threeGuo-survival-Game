@@ -29,7 +29,7 @@
     <div id="clock"></div>
   </div>
   <div id="quest" data-act="quest"><div id="quest-t"></div><div id="quest-d"></div><div id="quest-dist"></div><div id="quest-orders"></div></div>
-  <canvas id="minimap" width="150" height="150"></canvas>
+  <canvas id="minimap" width="150" height="150" data-act="map" title="點擊放大地圖（M）"></canvas><div id="minimap-hint">⤢</div>
   <div id="followers"></div>
 
   <div id="boss" class="hidden"><div id="boss-name"></div><div class="bar"><div id="boss-fill"></div></div></div>
@@ -100,7 +100,7 @@
         <kbd>V</kbd> 隊伍指令（跟隨／堅守／自由攻擊）<br>
         <kbd>F</kbd> 進食　<kbd>Z</kbd> 喝水　<kbd>H</kbd> 金瘡藥<br>
         <kbd>T</kbd> 燃燒彈　<kbd>B</kbd> 埋地雷　<kbd>1–0</kbd> 依序切換兵器<br>
-        <kbd>Tab</kbd> 背包／製作／訂單／地圖　<kbd>M</kbd> 配樂　<kbd>Esc</kbd> 暫停</p></div>
+        <kbd>Tab</kbd> 背包／製作／訂單　<kbd>M</kbd> 大地圖　<kbd>Esc</kbd> 暫停</p></div>
       <div class="touch-only"><h3>觸控操作</h3>
         <p>・<strong>左半螢幕</strong>拖曳移動，推到底即奔跑<br>
         ・<strong>右半螢幕</strong>拖曳轉動視角<br>
@@ -109,7 +109,7 @@
         ・出現<strong>金框提示</strong>時點它即可互動（採集、交談、上下馬）<br>
         ・⚑ 切換隊伍指令（跟隨／堅守／自由攻擊）<br>
         ・投擲鍵丟出震天雷／燃燒彈／地雷，↻ 切換種類<br>
-        ・🎒 開啟製作／背包／地圖；點左上任務可展開說明</p></div>
+        ・🎒 開啟製作／背包；點右上<strong>小地圖</strong>放大成大地圖；點左上任務可展開說明</p></div>
       <div><h3>求生要訣</h3>
         <p>・先打開身旁的<strong>軍火箱</strong>，再往東南找<strong>劉備軍營</strong><br>
         ・採集<strong>硝石、硫磺、木炭</strong>調配黑火藥<br>
@@ -165,6 +165,23 @@
     <div class="tabs"><span class="ttl">🏭 軍火工坊</span><button data-wtab="build" class="on">建築</button><button data-wtab="prod">生產</button><button data-wtab="store">倉庫</button><button data-wtab="upg">改良</button><button data-wtab="crew">工匠</button><button data-close class="x">✕</button></div>
     <div id="ws-status" class="dim"></div>
     <div id="ws-body" class="tab"></div>
+  </div>
+</div>
+
+<div id="menu-map" class="menu hidden">
+  <div class="panel map-panel">
+    <div class="tabs"><span class="ttl">🗺️ 天下輿圖</span><span id="map-pos" class="dim"></span>
+      <button id="map-zin" title="放大">＋</button><button id="map-zout" title="縮小">－</button><button id="map-me">⌖ 我</button><button id="map-all">全圖</button><button data-close class="x">✕</button></div>
+    <div class="map-body">
+      <div id="map-wrap"><canvas id="worldmap"></canvas></div>
+      <div class="map-legend">
+        <div><i style="background:#5ac86a"></i>友軍據點</div><div><i style="background:#e0503a"></i>⚔ 敵營</div><div><i style="background:#9a9a8a"></i>✔ 已平定</div>
+        <div><i class="ring"></i>任務目標</div><div><i style="background:#e0a040"></i>軍火工坊</div><div><i style="background:#b070e0"></i>黑市</div>
+        <div><b>▲</b>你</div><div><i class="dot" style="background:#7af08a"></i>隊友</div><div><i class="dot" style="background:#ffe08a"></i>侍從</div>
+        <div><i class="dot" style="background:#d4a050"></i>你的馬</div><div><i class="dot" style="background:#e8553a"></i>附近敵兵</div>
+        <p class="dim">拖曳移動・滾輪或雙指縮放</p>
+      </div>
+    </div>
   </div>
 </div>
 

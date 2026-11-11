@@ -405,13 +405,13 @@ export function initInput(canvas) {
     if (G.menu === 'cutscene') { if (!e.repeat) G.skipCutscene(); return; }
     if (G.menu === 'intro') { if (!e.repeat) G.skipIntro(); return; }
     if (G.menu) {
-      if ((e.code === 'Escape' || e.code === 'Tab' || e.code === 'KeyC') && !e.repeat) G.ui.escape();
+      if ((e.code === 'Escape' || e.code === 'Tab' || e.code === 'KeyC' || (e.code === 'KeyM' && G.menu === 'map')) && !e.repeat) G.ui.escape();
       return;
     }
     if (e.repeat) return;
     keys[e.code] = true;
     if (e.code.startsWith('Digit')) { const d = +e.code.slice(5), own = HOTBAR.filter(w => P.owned[w]), id = own[(d + 9) % 10]; if (id) P.equip(id); } // 數字鍵依序對應已擁有的兵器
-    else act({ KeyE: 'interact', Space: 'jump', KeyR: 'reload', KeyG: 'grenade', KeyT: 'firebomb', KeyB: 'mine', KeyF: 'eat', KeyH: 'heal', KeyZ: 'drink', KeyX: 'whistle', Tab: 'menu', KeyC: 'menu', KeyI: 'menu', KeyM: 'music', KeyV: 'command', Escape: 'pause', KeyP: 'pause' }[e.code]);
+    else act({ KeyE: 'interact', Space: 'jump', KeyR: 'reload', KeyG: 'grenade', KeyT: 'firebomb', KeyB: 'mine', KeyF: 'eat', KeyH: 'heal', KeyZ: 'drink', KeyX: 'whistle', Tab: 'menu', KeyC: 'menu', KeyI: 'menu', KeyM: 'map', KeyV: 'command', Escape: 'pause', KeyP: 'pause' }[e.code]);
   });
   document.addEventListener('keyup', e => { keys[e.code] = false; });
   window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.l = mouse.r = false; });
@@ -490,6 +490,7 @@ function act(a) {
     case 'menu': G.ui.open('inv'); break;
     case 'pause': G.ui.open('pause'); break;
     case 'command': G.cycleCommand(); break;
+    case 'map': G.ui.openMap(); break;
     case 'music': G.ui.msg(audio.toggleMusic() ? '配樂：開' : '配樂：關', 'info'); break;
   }
 }

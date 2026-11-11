@@ -5,6 +5,7 @@ import { audio } from './audio.js';
 import { angDiff } from './util.js';
 import { QUESTS, dialogFor, questSite } from './quests.js';
 import { BM, gunRate } from './blackmarket.js';
+import { drawMap, openMap, initMapUI } from './mapview.js';
 import { resetInput } from './player.js';
 import { SQUAD_CMDS } from './data.js';
 import { followers, squadUsed, squadCap } from './squad.js';
@@ -15,7 +16,7 @@ import { S, DEFAULTS, QUALITY, saveSettings } from './settings.js';
 const $ = id => document.getElementById(id);
 const el = {};
 let hitT = 0, mapT = 0, last = {}, bossRef = null;
-const MENUS = ['start', 'pause', 'inv', 'dialog', 'shop', 'dead', 'win', 'settings', 'workshop'];
+const MENUS = ['start', 'pause', 'inv', 'dialog', 'shop', 'dead', 'win', 'settings', 'workshop', 'map'];
 
 export const ui = {
   dirty: true,
@@ -28,6 +29,8 @@ export const ui = {
     $('btn-music').onclick = () => ui.msg(audio.toggleMusic() ? '配樂：開' : '配樂：關', 'info');
     $('btn-save').onclick = () => { G.save(); ui.msg('已存檔。', 'info'); };
     $('btn-intro').onclick = () => G.replayIntro();
+    initMapUI();
+    $('tab-map').insertAdjacentHTML('afterbegin', '<p class="dim" style="margin:0 0 6px">提示：點右上角小地圖（電腦按 M）可開啟能縮放的大地圖。</p>');
     document.querySelectorAll('[data-settings]').forEach(b => b.onclick = () => ui.openSettings());
     $('settings-back').onclick = () => ui.closeSettings();
     for (const [ch, a] of [['北', 0], ['東', -Math.PI / 2], ['南', Math.PI], ['西', Math.PI / 2]]) { // yaw：面向該方位時的鏡頭角
@@ -48,7 +51,8 @@ export const ui = {
     for (const m of MENUS) $('menu-' + m).classList.add('hidden');
     G.menu = null; G.lockPointer && G.lockPointer(); document.body.classList.remove('menu-open');
   },
-  escape() { if (G.menu === 'settings') this.closeSettings(); else if (['pause', 'inv', 'shop', 'dialog', 'win', 'workshop'].includes(G.menu)) this.close(); },
+  escape() { if (G.menu === 'settings') this.closeSettings(); else if (['pause', 'inv', 'shop', 'dialog', 'win', 'workshop', 'map'].includes(G.menu)) this.close(); },
+  openMap() { openMap(); },
   // ---------- 設定 ----------
   openSettings() { this.settingsFrom = G.menu || 'pause'; this.open('settings'); this.renderSettings(); },
   closeSettings() { this.open(this.settingsFrom === 'start' ? 'start' : 'pause'); },
@@ -134,25 +138,7 @@ export const ui = {
       this.renderBag();
     });
   },
-  renderMap() {
-    const c = $('bigmap'), g = c.getContext('2d'), S = c.width, k = S / (HALF * 2), P = G.player;
-    const X = x => (x + HALF) * k, Z = z => (z + HALF) * k;
-    g.fillStyle = '#3a4a2a'; g.fillRect(0, 0, S, S);
-    g.strokeStyle = '#2a2a22'; g.lineWidth = 34; g.strokeRect(0, 0, S, S);
-    g.strokeStyle = '#3f7f9f'; g.lineWidth = 7; g.beginPath();
-    for (let z = -HALF; z <= HALF; z += 10) g.lineTo(X(riverX(z)), Z(z)); g.stroke();
-    g.textAlign = 'center'; g.font = 'bold 15px serif';
-    const q = QUESTS[G.stage];
-    for (const id in SITES) {
-      const s = SITES[id], hostile = HOSTILE_SITES.includes(id);
-      g.fillStyle = hostile ? '#c8402a' : '#5ac86a'; g.beginPath(); g.arc(X(s.x), Z(s.z), 7, 0, 7); g.fill();
-      if (q && questSite(q) === id) { g.strokeStyle = '#ffd24a'; g.lineWidth = 3; g.beginPath(); g.arc(X(s.x), Z(s.z), 12, 0, 7); g.stroke(); }
-      g.fillStyle = '#f4e8c8'; g.fillText(s.name, X(s.x), Z(s.z) - 14);
-    }
-    g.fillStyle = '#d8cfb8'; g.fillText('北', S / 2, 14);
-    g.save(); g.translate(X(P.pos.x), Z(P.pos.z)); g.rotate(-P.yaw);
-    g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, -10); g.lineTo(6, 7); g.lineTo(0, 3); g.lineTo(-6, 7); g.fill(); g.restore();
-  },
+  renderMap() { drawMap($('bigmap'), { cx: 0, cz: 0, zoom: 1 }); }, // 背包地圖頁：全圖
   renderShop() {
     const P = G.player; $('shop-coin').textContent = `🪙 ${P.count('coin')} 五銖錢`;
     const buy = $('shop-buy'), sell = $('shop-sell'); buy.innerHTML = sell.innerHTML = '';
