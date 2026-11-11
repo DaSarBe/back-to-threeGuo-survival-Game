@@ -5,6 +5,8 @@ import { audio } from './audio.js';
 import { angDiff } from './util.js';
 import { QUESTS, dialogFor } from './quests.js';
 import { resetInput } from './player.js';
+import { SQUAD_CMDS } from './data.js';
+import { followers, squadUsed, squadCap } from './squad.js';
 
 const $ = id => document.getElementById(id);
 const el = {};
@@ -134,7 +136,7 @@ export const ui = {
     $('dlg-text').textContent = node.text;
     const box = $('dlg-opts'); box.innerHTML = '';
     for (const o of node.opts || [{ t: '告辭' }]) {
-      const b = document.createElement('button'); b.textContent = '▸ ' + o.t;
+      const b = document.createElement('button'); b.textContent = '▸ ' + o.t; b.disabled = !!o.dis;
       b.onclick = () => { const next = o.fn ? o.fn() : null; if (next === 'shop') ui.open('shop'); else if (G.menu === 'dialog') ui.showDialog(actor, next); };
       box.appendChild(b);
     }
@@ -159,6 +161,17 @@ export const ui = {
     this.open('dead');
   },
   fade(on) { el.fade.style.opacity = on ? 1 : 0; },
+  cine(on, boss) {
+    document.body.classList.toggle('cine', on);
+    if (on) {
+      $('cine-name').textContent = boss.name; $('cine-title').textContent = boss.def.title; $('cine-line').textContent = '';
+      $('cine-card').classList.remove('show'); $('cine-line').classList.remove('show');
+    }
+  },
+  cineStep(card, line) {
+    $('cine-card').classList.toggle('show', card); const l = $('cine-line');
+    if (line && !l.classList.contains('show')) { l.textContent = line; l.classList.add('show'); } else if (!line) l.classList.remove('show');
+  },
 
   // ---------- 每幀 HUD ----------
   update(dt) {
@@ -176,7 +189,7 @@ export const ui = {
       el['ammo-w'].textContent = w.n + (P.reloadT > 0 ? '　換彈中…' : '');
       el['ammo-n'].innerHTML = w.type === 'gun' ? `${P.mags[P.cur]} <small>/ ${w.ammo ? P.count(w.ammo) : '∞'}</small>` : w.type === 'bow' ? `${P.count('arrow')} <small>箭</small>` : '';
       const food = P.count('cooked') + P.count('ration') + P.count('berry') + P.count('meat');
-      if (G.touch) { $('q-food').textContent = food; $('q-water').textContent = P.canteen; $('q-med').textContent = P.count('medicine'); $('q-gren').textContent = P.count('grenade'); }
+      if (G.touch) { $('q-cmd').textContent = SQUAD_CMDS.find(c => c.id === G.squadCmd).s; $('q-food').textContent = food; $('q-water').textContent = P.canteen; $('q-med').textContent = P.count('medicine'); $('q-gren').textContent = P.count('grenade'); }
       el.quick.innerHTML = `💣 ${P.count('grenade')} <kbd>G</kbd>　🍖 ${food} <kbd>F</kbd><br>💧 ${P.canteen}/3 <kbd>Z</kbd>　💊 ${P.count('medicine')} <kbd>H</kbd><br>🪙 ${P.count('coin')}`;
     }
 
@@ -205,11 +218,28 @@ export const ui = {
     // 頭目血條
     let boss = null, bd = 80;
     for (const a of G.actors) if (a.alive && a.def.boss) { const d = Math.hypot(a.pos.x - P.pos.x, a.pos.z - P.pos.z); if (d < bd) { bd = d; boss = a; } }
-    if (boss !== bossRef) { bossRef = boss; el.boss.classList.toggle('hidden', !boss); if (boss) el['boss-name'].textContent = `${boss.name}　${boss.def.title}`; }
+    const shield = boss && boss.arena && !boss.inArena(P);
+    if (boss !== bossRef || shield !== last.shield) {
+      bossRef = boss; last.shield = shield; el.boss.classList.toggle('hidden', !boss); el.boss.classList.toggle('shield', !!shield);
+      if (boss) el['boss-name'].textContent = `${boss.name}　${boss.def.title}` + (shield ? '　⛨護體' : '');
+    }
     if (boss) el['boss-fill'].style.width = Math.max(0, boss.hp / boss.maxHp * 100) + '%';
-    const f = G.actors.filter(a => a.follow && a.alive);
-    const key = f.map(a => a.name + Math.round(a.hp / a.maxHp * 20)).join();
-    if (last.fol !== key) { last.fol = key; el.followers.innerHTML = f.map(a => `<div>⚔️ ${a.name}<span class="bar"><div style="width:${a.hp / a.maxHp * 100}%"></div></span></div>`).join(''); }
+    // 隊伍：名將逐一列出，兵卒依兵種合併
+    const f = followers(), gens = f.filter(a => a.def.general), groups = {};
+    for (const a of f) if (!a.def.general) { const g = groups[a.id] || (groups[a.id] = { n: 0, hp: 0, name: a.def.short }); g.n++; g.hp += a.hp / a.maxHp; }
+    const cmd = SQUAD_CMDS.find(c => c.id === G.squadCmd);
+    const rows = [];
+    if (f.length) rows.push(`<div class="cmd">⚑ ${cmd.n}　${squadUsed()}/${squadCap()}</div>`);
+    for (const a of gens) rows.push(`<div>⚔️ ${a.name}<span class="bar"><div style="width:${a.hp / a.maxHp * 100}%"></div></span></div>`);
+    for (const k in groups) { const g = groups[k]; rows.push(`<div>🛡️ ${g.name} ×${g.n}<span class="bar"><div style="width:${g.hp / g.n * 100}%"></div></span></div>`); }
+    for (const a of G.attendants) rows.push(`<div class="att">🧺 ${a.name} ${a.carried}/${a.cap}${a.wait ? '（留守）' : ''}</div>`);
+    if (G.touch) { // 手機：濃縮成三行，避免擋到右側按鍵
+      rows.length = 0;
+      if (f.length) rows.push(`<div class="cmd">⚑${cmd.n} ${squadUsed()}/${squadCap()}</div>`, `<div>${[...gens.map(a => '⚔️' + a.name), ...Object.values(groups).map(g => `🛡️${g.name}×${g.n}`)].join(' ')}</div>`);
+      if (G.attendants.length) rows.push(`<div class="att">🧺${G.attendants.map(a => a.name + ' ' + a.carried).join('　')}</div>`);
+    }
+    const key = rows.join('');
+    if (last.fol !== key) { last.fol = key; el.followers.innerHTML = key; }
   },
   drawMini() {
     const c = el.minimap, g = c.getContext('2d'), S = 150, R = 110, k = S / (R * 2), P = G.player;
@@ -228,6 +258,7 @@ export const ui = {
     }
     const dot = (o, col, r) => { const x = X(o.pos.x), z = Z(o.pos.z); if (Math.hypot(x - S / 2, z - S / 2) > S / 2) return; g.fillStyle = col; g.beginPath(); g.arc(x, z, r, 0, 7); g.fill(); };
     for (const a of G.animals) if (a.alive) { if (a.kind === 'horse') dot(a, a === P.horse ? '#ffd24a' : '#b08a5a', 2.5); else if (a.kind === 'wolf') dot(a, '#d070d0', 2); }
+    for (const a of G.attendants) dot(a, '#ffe08a', 2.2);
     for (const a of G.actors) if (a.alive) dot(a, a.faction === 'enemy' ? (a.def.boss ? '#ff2a1a' : '#e8553a') : (a.def.general ? '#7af08a' : '#4aa85a'), a.def.boss || a.def.general ? 3.5 : 2.2);
     g.save(); g.translate(S / 2, S / 2); g.rotate(-P.yaw);
     g.fillStyle = '#fff'; g.beginPath(); g.moveTo(0, -7); g.lineTo(5, 5); g.lineTo(0, 2); g.lineTo(-5, 5); g.fill(); g.restore();

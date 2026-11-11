@@ -59,6 +59,11 @@ export function weaponParts(kind) {
       p.push(bx(0.008, 1.16, 0.008, 0xddddcc, 0, 0, -0.31));
       break;
     }
+    case 'shield': // 圓盾（持於左臂）
+      p.push(cyl(0.34, 0.34, 0.05, 10, 0x7a1a14, 0, 0.1, 0));
+      p.push(cyl(0.36, 0.36, 0.03, 10, 0xd4af37, 0, 0.08, 0));
+      p.push(ball(0.07, 0xd4af37, 0, 0.14, 0));
+      break;
     case 'staff': // 九節杖
       p.push(cyl(0.03, 0.03, 2.1, 6, 0x6a5a2a, 0, 0.4, 0));
       for (let i = 0; i < 4; i++) p.push(cyl(0.045, 0.045, 0.05, 6, GOLD, 0, 0.9 + i * 0.16, 0));

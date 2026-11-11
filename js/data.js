@@ -89,6 +89,12 @@ export const ACTORS = {
   // ---- 友軍士卒 ----
   ally_soldier: { name: '劉備軍士卒', faction: 'ally', hp: 180, speed: 5.0, dmg: 18, reach: 3.0, cd: 1.3, weapon: 'spear', look: { cloth: 0x2f6b3a, armor: 0x2a4a30, pants: 0x30302a, hat: 'helmet', hatColor: 0x3a4a3a, crest: 0x2f8b3a } },
   co_soldier: { name: '聯軍士卒', faction: 'ally', hp: 180, speed: 5.0, dmg: 18, reach: 2.4, cd: 1.2, weapon: 'dao', look: { cloth: 0x2a3f7a, armor: 0x25305a, pants: 0x25252a, hat: 'helmet', hatColor: 0x30354a, crest: 0x3050b0 } },
+  // ---- 可招募的兵卒（跟隨玩家，陣亡即消失） ----
+  sq_spear: { name: '劉軍槍兵', short: '槍兵', faction: 'ally', squad: true, hp: 170, speed: 5.2, dmg: 17, reach: 3.0, cd: 1.3, weapon: 'spear', look: { cloth: 0x2f6b3a, armor: 0x2a4a30, pants: 0x30302a, hat: 'helmet', hatColor: 0x3a4a3a, crest: 0x2f8b3a } },
+  sq_blade: { name: '劉軍刀兵', short: '刀兵', faction: 'ally', squad: true, hp: 150, speed: 5.6, dmg: 16, reach: 2.4, cd: 1.0, weapon: 'dao', look: { cloth: 0x3a7a45, pants: 0x30302a, hat: 'turban', hatColor: 0x2a5a30 } },
+  sq_archer: { name: '曹軍弓弩手', short: '弓弩手', faction: 'ally', squad: true, hp: 115, speed: 5.0, dmg: 17, ranged: true, cd: 1.9, weapon: 'bow', look: { cloth: 0x2a3f7a, pants: 0x25252a, hat: 'turban', hatColor: 0x1a2a5a } },
+  sq_cav: { name: '曹軍騎兵', short: '騎兵', faction: 'ally', squad: true, hp: 250, speed: 9.5, dmg: 23, reach: 3.3, cd: 1.4, weapon: 'spear', mounted: true, horseColor: 0x3a2a1c, look: { cloth: 0x2a3f7a, armor: 0x25305a, pants: 0x25252a, hat: 'helmet', hatColor: 0x30354a, crest: 0x3050b0 } },
+  sq_shield: { name: '孫軍刀盾兵', short: '刀盾兵', faction: 'ally', squad: true, hp: 320, speed: 4.8, dmg: 15, reach: 2.4, cd: 1.1, weapon: 'dao', weapon2: 'shield', look: { cloth: 0xa82a20, armor: 0x7a1a14, pants: 0x3a1a14, hat: 'helmet', hatColor: 0x5a1a14, crest: 0xc8201a } },
   // ---- 名將（友方） ----
   liubei: { name: '劉備', title: '字玄德・漢室宗親', general: true, faction: 'ally', hp: 1400, speed: 5.6, dmg: 40, reach: 2.6, cd: 0.9, weapon: 'sword', weapon2: 'sword', scale: 1.08, look: { cloth: 0x2f7a45, armor: 0xb8963a, pants: 0x2a2a2a, hat: 'crown', hatColor: 0xd4af37, beard: 'short', cape: 0x1f5a30 } },
   guanyu: { name: '關羽', title: '字雲長・美髯公', general: true, faction: 'ally', hp: 2200, speed: 5.8, dmg: 62, reach: 3.6, cd: 1.1, weapon: 'guandao', scale: 1.2, look: { skin: 0xb5483a, cloth: 0x1f6b35, armor: 0x1a5a2c, pants: 0x1a3a22, hat: 'cap', hatColor: 0x1a5a2c, beard: 'long', cape: 0x145025 } },
@@ -98,8 +104,41 @@ export const ACTORS = {
   sunjian: { name: '孫堅', title: '字文臺・江東猛虎', general: true, faction: 'ally', hp: 1800, speed: 6.0, dmg: 52, reach: 2.6, cd: 0.95, weapon: 'dao', scale: 1.15, look: { cloth: 0xa82a20, armor: 0x7a1a14, pants: 0x3a1a14, hat: 'turban', hatColor: 0xc8201a, beard: 'short', cape: 0x8a1a14 } },
   mizhu: { name: '糜竺', title: '字子仲・徐州富商', general: true, noncombat: true, faction: 'ally', hp: 9999, speed: 3, dmg: 0, reach: 2, cd: 9, weapon: null, look: { cloth: 0x7a5a2a, pants: 0x3a2a1a, hat: 'guan', hatColor: 0x2a1a10, beard: 'short' } },
   // ---- 頭目 ----
-  zhangjiao: { name: '張角', title: '大賢良師・天公將軍', boss: true, faction: 'enemy', hp: 650, speed: 3.6, dmg: 22, reach: 2.8, cd: 1.6, weapon: 'staff', special: 'lightning', scale: 1.12, look: { cloth: 0xd8b830, pants: 0x8a7a30, hat: 'turban', hatColor: 0xf0d020, beard: 'long', beardColor: 0x9a9a9a, cape: 0xb89820 }, drop: { coin: [150, 200], items: [['medicine', 1, 3], ['saltpeter', 1, 6], ['sulfur', 1, 6]] } },
-  huaxiong: { name: '華雄', title: '董卓麾下驍將', boss: true, faction: 'enemy', hp: 1100, speed: 5.6, dmg: 30, reach: 3.5, cd: 1.3, weapon: 'guandao', scale: 1.22, look: { cloth: 0x4a2a2a, armor: 0x3a3a40, pants: 0x25252a, hat: 'helmet', hatColor: 0x3a3a40, crest: 0xb02020, beard: 'bushy', cape: 0x5a1010 }, drop: { coin: [220, 280], items: [['medicine', 1, 3], ['iron', 1, 10], ['powder', 1, 6]] } },
-  lvbu: { name: '呂布', title: '字奉先・人中呂布', boss: true, faction: 'enemy', hp: 3200, speed: 7.0, dmg: 36, reach: 3.9, cd: 1.0, weapon: 'ji', special: 'charge', scale: 1.3, look: { cloth: 0x8a1a1a, armor: 0x2a2a30, pants: 0x1a1a1a, hat: 'feather', hatColor: 0xd4af37, cape: 0xa81818 }, drop: { coin: [400, 500], items: [['medicine', 1, 4]], weapon: ['ji', 1] } },
-  dongzhuo: { name: '董卓', title: '字仲穎・竊國太師', boss: true, faction: 'enemy', hp: 1600, speed: 3.4, dmg: 30, reach: 2.8, cd: 1.4, weapon: 'sword', special: 'summon', scale: 1.25, look: { cloth: 0x4a1a5a, armor: 0x2a1a30, pants: 0x1a1a1a, hat: 'crown', hatColor: 0xd4af37, beard: 'bushy', fat: true, cape: 0x3a1040 }, drop: { coin: [600, 800], items: [['medicine', 1, 5]] } },
+  zhangjiao: { name: '張角', title: '大賢良師・天公將軍', boss: true, arenaR: 30, line: '蒼天已死，黃天當立！\n歲在甲子，天下大吉！', faction: 'enemy', hp: 900, speed: 3.6, dmg: 22, reach: 2.8, cd: 1.6, weapon: 'staff', special: 'lightning', scale: 1.12, look: { cloth: 0xd8b830, pants: 0x8a7a30, hat: 'turban', hatColor: 0xf0d020, beard: 'long', beardColor: 0x9a9a9a, cape: 0xb89820 }, drop: { coin: [150, 200], items: [['medicine', 1, 3], ['saltpeter', 1, 6], ['sulfur', 1, 6]] } },
+  huaxiong: { name: '華雄', title: '董卓麾下驍將', boss: true, arenaR: 32, line: '又來一個送死的？\n某家刀下，已斬聯軍四將！', faction: 'enemy', hp: 1500, speed: 5.6, dmg: 30, reach: 3.5, cd: 1.3, weapon: 'guandao', scale: 1.22, look: { cloth: 0x4a2a2a, armor: 0x3a3a40, pants: 0x25252a, hat: 'helmet', hatColor: 0x3a3a40, crest: 0xb02020, beard: 'bushy', cape: 0x5a1010 }, drop: { coin: [220, 280], items: [['medicine', 1, 3], ['iron', 1, 10], ['powder', 1, 6]] } },
+  lvbu: { name: '呂布', title: '字奉先・人中呂布', boss: true, arenaR: 36, line: '哼，就憑你？\n吾乃九原呂奉先——誰敢接我一戟！', faction: 'enemy', hp: 3800, speed: 7.0, dmg: 36, reach: 3.9, cd: 1.0, weapon: 'ji', special: 'charge', scale: 1.3, look: { cloth: 0x8a1a1a, armor: 0x2a2a30, pants: 0x1a1a1a, hat: 'feather', hatColor: 0xd4af37, cape: 0xa81818 }, drop: { coin: [400, 500], items: [['medicine', 1, 4]], weapon: ['ji', 1] } },
+  dongzhuo: { name: '董卓', title: '字仲穎・竊國太師', boss: true, arenaR: 30, line: '區區妖人，也敢壞老夫大事？\n左右，給我拿下！', faction: 'enemy', hp: 2200, speed: 3.4, dmg: 30, reach: 2.8, cd: 1.4, weapon: 'sword', special: 'summon', scale: 1.25, look: { cloth: 0x4a1a5a, armor: 0x2a1a30, pants: 0x1a1a1a, hat: 'crown', hatColor: 0xd4af37, beard: 'bushy', fat: true, cape: 0x3a1040 }, drop: { coin: [600, 800], items: [['medicine', 1, 5]] } },
 };
+
+// ---------- 招兵買馬 ----------
+// 每個兵種可用錢或資源招募；stage = 主線推進到第幾階段才開放
+export const RECRUITS = {
+  liubei: { stage: 1, units: [
+    { id: 'sq_spear', coin: 40, res: { ration: 2, iron: 2 } },
+    { id: 'sq_blade', coin: 35, res: { ration: 2, wood: 3 } },
+  ], attendant: 'wood' },
+  caocao: { stage: 2, units: [
+    { id: 'sq_archer', coin: 60, res: { ration: 2, arrow: 10 } },
+    { id: 'sq_cav', coin: 130, res: { ration: 3, iron: 5, meat: 2 } },
+  ], attendant: 'ore' },
+  sunjian: { stage: 2, units: [
+    { id: 'sq_shield', coin: 70, res: { ration: 2, iron: 3, wood: 3 } },
+  ], attendant: 'herb' },
+};
+// 隊伍名額：兵卒佔 1、名將佔 2；隨主線推進增加
+export const SQUAD_CAP = [0, 3, 4, 5, 6, 8];
+export const ATTENDANT_MAX = 3;
+export const ATTENDANT_COST = { coin: 300, res: { wood: 10, iron: 10, ration: 5 } };
+export const ATTENDANTS = {
+  all: { name: '阿福', role: '小廝', desc: '什麼都撿', look: { cloth: 0x8a7a5a, pants: 0x4a3a2a, hat: 'default' } },
+  wood: { name: '石頭', role: '樵夫', desc: '專門砍柴，一次帶回兩份木材', look: { cloth: 0x6a5a3a, pants: 0x3a3020, hat: 'turban', hatColor: 0x5a4a2a } },
+  ore: { name: '老鐵', role: '礦工', desc: '專門採礦，一次帶回兩份礦石', look: { cloth: 0x4a4a50, pants: 0x2a2a2e, hat: 'turban', hatColor: 0x3a3a3a, beard: 'short' } },
+  herb: { name: '小青', role: '藥童', desc: '專門採藥摘果，一次帶回兩份', look: { cloth: 0x4a8a6a, pants: 0x2a4a3a, hat: 'default' } },
+};
+// 名將解鎖條件（擊敗哪位頭目後願意同行）
+export const UNLOCK = { guanyu: 'zhangjiao', zhangfei: 'zhangjiao', zhaoyun: 'huaxiong', caocao: 'huaxiong', sunjian: 'huaxiong', liubei: 'lvbu' };
+export const SQUAD_CMDS = [
+  { id: 'follow', n: '跟隨', s: '跟' },
+  { id: 'hold', n: '原地堅守', s: '守' },
+  { id: 'attack', n: '自由攻擊', s: '攻' },
+];

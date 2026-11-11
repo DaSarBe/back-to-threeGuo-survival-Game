@@ -150,3 +150,21 @@ body.touch .menu.low { padding-bottom: calc(8px + var(--sb)); } body.touch .btns
 }
 @media (orientation: landscape) and (max-height: 430px) { body.touch .cols > div:last-child { display: none; } body.touch #menu-start .cols { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .cols { grid-template-columns: 1fr; } .panel { padding: 14px; } }
+
+/* ---------- 隊伍面板 ---------- */
+#followers .cmd { color: #ffd24a; font-weight: bold; } #followers .att { color: #ffe08a; }
+#boss.shield #boss-fill { background: linear-gradient(#e8c050, #9a7a20); } #boss.shield #boss-name { color: #ffd24a; }
+/* ---------- 開戰動畫 ---------- */
+#cine { position: fixed; inset: 0; z-index: 25; pointer-events: none; display: none; }
+body.cine #cine { display: block; } body.cine #hud, body.cine #touch { display: none !important; }
+#cine .bar { position: absolute; left: 0; right: 0; height: 13vh; background: #000; animation: cinebar .45s ease-out; }
+#cine .top { top: 0; } #cine .bot { bottom: 0; }
+@keyframes cinebar { from { height: 0; } }
+#cine-card { position: absolute; left: 7vw; top: 30vh; opacity: 0; transform: translateX(-30px); transition: opacity .5s, transform .5s; }
+#cine-card.show { opacity: 1; transform: none; }
+#cine-name { font-size: clamp(48px, 12vh, 110px); font-weight: bold; color: #f4e2b0; letter-spacing: .15em; text-shadow: 0 0 20px rgba(200,40,20,.8), 0 4px 0 #5a1010; }
+#cine-title { font-size: clamp(14px, 3.2vh, 24px); color: #ffd24a; letter-spacing: .3em; margin-top: 6px; border-top: 2px solid #c8402a; padding-top: 6px; display: inline-block; }
+#cine-line { position: absolute; left: 0; right: 0; bottom: 15vh; text-align: center; font-size: clamp(15px, 3.4vh, 26px); color: #fff; white-space: pre-line; line-height: 1.5; text-shadow: 0 2px 4px #000; opacity: 0; transition: opacity .4s; }
+#cine-line.show { opacity: 1; }
+#cine-skip { position: absolute; right: 3vw; bottom: 3vh; font-size: 12px; color: #aaa; }
+body.touch #followers div { margin: 0; line-height: 1.35; white-space: nowrap; }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { G } from './state.js';
-import { ACTORS, ITEMS, WEAPONS } from './data.js';
+import { ACTORS, ITEMS, WEAPONS, ATTENDANTS } from './data.js';
 import { humanoid, quadruped } from './models.js';
 import { world, heightAt, WATER } from './world.js';
 import { audio } from './audio.js';
@@ -28,13 +28,17 @@ export class Actor {
       m.root.add(this.horse.root); this.seat = 0.86; m.inner.position.y = this.seat;
       m.legL.rotation.set(-1.0, 0, -0.5); m.legR.rotation.set(-1.0, 0, 0.5);
     }
-    if (d.general || d.boss) {
-      const l = makeLabel(d.name, d.boss ? '#ff6a5a' : '#9af0a0');
+    if (d.general || d.boss || o.recruited) {
+      const l = makeLabel(o.recruited ? d.short : d.name, d.boss ? '#ff6a5a' : o.recruited ? '#bfe4ff' : '#9af0a0');
+      if (o.recruited) { l.material.sizeAttenuation = false; l.scale.set(0.26, 0.065, 1); } // 固定螢幕大小，靠近時不會變巨大
       l.position.y = 2.2 * this.scale + this.seat + 0.25; m.root.add(l);
     }
+    this.recruited = !!o.recruited;
+    if (o.recruited) this.follow = true;
+    if (d.arenaR) this.arena = makeArena(x, z, d.arenaR);
     m.root.position.copy(this.pos); m.root.rotation.y = this.yaw;
     G.scene.add(m.root); G.actors.push(this);
-    this.alive = true; this.target = null; this.follow = false;
+    this.alive = true; this.target = null; this.follow = this.follow || false;
     this.atkT = rnd(1); this.wind = 0; this.windTot = 0.5; this.walkPh = rnd(6); this.curSpeed = 0;
     this.alert = 0; this.wanderT = rnd(1, 5); this.dest = null; this.retT = rnd(0.5);
     this.specialT = 3 + rnd(2); this.charge = 0; this.summoned = 0; this.deathT = 0;
@@ -53,9 +57,16 @@ export class Actor {
     return best >= 0 ? { t: best, head } : null;
   }
 
+  // 決戰圈：玩家在圈內，敵將的護體才會破
+  inArena(o) { return this.arena && o && o.alive !== false && d2(o.pos, this.home) < this.arena.R; }
   damage(n, src) {
-    if (!this.alive || this.def.noncombat) return;
-    if (this.faction === 'ally' && src === G.player) return;
+    if (!this.alive || this.def.noncombat) return false;
+    if (this.faction === 'ally' && src === G.player) return false;
+    if (this.arena && !this.inArena(G.player)) {
+      if (G.now - (this.sparkT || -9) > 0.12) { this.sparkT = G.now; V.set(this.pos.x, this.pos.y + 1.3 * this.scale, this.pos.z); fxBurst(V, 0xffd860, 10, 4, 0.35, 0.16); audio.playAt('clang', d2(this.pos, G.player.pos), 0.6); }
+      if (G.now - (this.immT || -9) > 3) { this.immT = G.now; G.ui.msg(`⛨ ${this.name} 護體未破——踏入地上的決戰圈才能傷到他！`, 'warn'); }
+      return false;
+    }
     if (this.def.boss && src instanceof Actor) n *= 0.4;
     this.hp -= n; this.alert = 12;
     if (src && src !== this && src.alive !== false && (!this.target || src === G.player || Math.random() < 0.3)) {
@@ -64,6 +75,7 @@ export class Actor {
     // 呼叫附近同伴
     if (this.faction === 'enemy') for (const a of G.actors) if (a.alive && a.faction === 'enemy' && a !== this && d2(a.pos, this.pos) < 30) { a.alert = Math.max(a.alert, 10); if (!a.target && src) a.target = src; }
     if (this.hp <= 0) this.die(src);
+    return true;
   }
 
   die(src) {
@@ -75,6 +87,8 @@ export class Actor {
       return;
     }
     this.alive = false; this.target = null;
+    if (this.arena) { G.scene.remove(this.arena.mesh); this.arena = null; }
+    if (this.recruited) { this.follow = false; G.ui.msg(`${d.name} 陣亡了。（可再向主公招募）`, 'warn'); }
     if (this.faction === 'enemy') {
       const dr = d.drop;
       if (dr) {
@@ -91,18 +105,27 @@ export class Actor {
     const P = G.player; let best = null, bd = 1e9;
     if (this.faction === 'enemy') {
       const see = this.alert > 0 ? 110 : (world.isNight ? 28 : 40) * (this.def.boss ? 1.3 : 1);
-      if (P.alive) { const d = d2(this.pos, P.pos); if (d < see) { best = P; bd = d * 0.8; } }
-      for (const a of G.actors) if (a.alive && a.faction === 'ally' && !a.def.noncombat) { const d = d2(this.pos, a.pos); if (d < 32 && d < bd) { best = a; bd = d; } }
+      const ok = o => !this.arena || this.inArena(o); // 敵將只追擊決戰圈內的對手
+      if (P.alive && ok(P)) { const d = d2(this.pos, P.pos); if (d < see) { best = P; bd = d * 0.8; } }
+      for (const a of G.actors) if (a.alive && a.faction === 'ally' && !a.def.noncombat && ok(a)) { const d = d2(this.pos, a.pos); if (d < 32 && d < bd) { best = a; bd = d; } }
     } else {
-      const P_ = this.follow ? P.pos : this.pos;
+      const [anchor, range] = this.leash();
       for (const a of G.actors) if (a.alive && a.faction === 'enemy') {
-        const d = d2(this.pos, a.pos); if (d < bd && (d < 30 || (this.follow && d2(P_, a.pos) < 34))) { best = a; bd = d; }
+        const d = d2(this.pos, a.pos);
+        if (d < bd && (this.follow ? d2(anchor, a.pos) < range : d < 30)) { best = a; bd = d; }
       }
       if (!best) for (const a of G.animals) if (a.alive && a.kind === 'wolf') { const d = d2(this.pos, a.pos); if (d < 16 && d < bd) { best = a; bd = d; } }
     }
     return best;
   }
 
+  // 隨行部隊依指令決定活動範圍：[錨點, 搜敵半徑, 放棄追擊半徑]
+  leash() {
+    const c = G.squadCmd;
+    if (c === 'hold' && G.holdPos) return [G.holdPos, 22, 30];
+    if (c === 'attack') return [G.player.pos, 60, 80];
+    return [G.player.pos, 34, 46];
+  }
   update(dt) {
     const m = this.m, P = G.player, d = this.def;
     if (!this.alive) {
@@ -126,6 +149,8 @@ export class Actor {
       this.retT = 0.45 + rnd(0.2);
       const t = this.target;
       if (t && (t.alive === false || d2(this.pos, t.pos) > (this.alert > 0 ? 130 : 75))) this.target = null;
+      if (this.target && this.arena && !this.inArena(this.target)) this.target = null;
+      if (this.target && this.follow) { const [an, , drop] = this.leash(); if (d2(an, this.target.pos) > drop) this.target = null; }
       if (!this.target || this.target !== P || this.faction === 'ally') { const nt = this.findTarget(); if (nt) this.target = nt; }
       if (!this.roam && !this.follow && this.target && dist2(this.pos.x, this.pos.z, this.home.x, this.home.z) > (this.faction === 'ally' ? 45 : 150)) { this.target = null; this.alert = 0; }
     }
@@ -185,6 +210,11 @@ export class Actor {
           this.specialT = 1;
         }
       }
+    } else if (this.follow && G.squadCmd === 'hold' && G.holdPos) {
+      const i = this.slotIdx || 0, a = i * 2.4, r = 1.6 + i * 0.7;
+      if (!this.holdGoal || this.holdGoal.src !== G.holdPos) this.holdGoal = { src: G.holdPos, x: G.holdPos.x + Math.cos(a) * r, z: G.holdPos.z + Math.sin(a) * r };
+      const hd = dist2(this.pos.x, this.pos.z, this.holdGoal.x, this.holdGoal.z);
+      if (hd > 1.2) { goal = this.holdGoal; speed = d.speed * (hd > 10 ? 1.2 : 0.7); }
     } else if (this.follow) {
       const dx = P.pos.x - this.pos.x, dz = P.pos.z - this.pos.z;
       if (dp > 130) { this.pos.set(P.pos.x - 4 + rnd(8), 0, P.pos.z - 4 + rnd(8)); }
@@ -230,7 +260,14 @@ export class Actor {
         if (this.stuckT > 0.45) { this.stuckT = 0; this.sideDir = this.sideT > 0 ? -this.sideDir : (this.sideDir || (Math.random() < 0.5 ? 1 : -1)); this.sideT = 2.2; }
       } else this.stuckT = Math.max(0, this.stuckT - dt);
     }
-    if (this.follow && !tg && dp > 24) { this.farT += dt; if (this.farT > 9) { this.farT = 0; this.pos.set(P.pos.x - Math.sin(P.yaw + PI) * -4 + rnd(-2, 2), 0, P.pos.z - Math.cos(P.yaw + PI) * -4 + rnd(-2, 2)); } } else this.farT = 0;
+    if (this.follow && G.squadCmd !== 'hold' && !tg && dp > 24) { this.farT += dt; if (this.farT > 9) { this.farT = 0; this.pos.set(P.pos.x - Math.sin(P.yaw + PI) * -4 + rnd(-2, 2), 0, P.pos.z - Math.cos(P.yaw + PI) * -4 + rnd(-2, 2)); } } else this.farT = 0;
+    if (this.arena) {
+      const ax = this.pos.x - this.home.x, az = this.pos.z - this.home.z, ad = Math.hypot(ax, az), R = this.arena.R - 1.5;
+      if (ad > R) { this.pos.x = this.home.x + ax / ad * R; this.pos.z = this.home.z + az / ad * R; }
+      // 玩家不在圈內時，敵將慢慢回復（每秒 1%）
+      if (!this.inArena(P) && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.01 * dt);
+      this.arena.mat.opacity = 0.75 + 0.25 * Math.sin(G.now * 3);
+    }
     this.curSpeed = lerp(this.curSpeed, speed, Math.min(1, dt * 8));
     this.pos.y = Math.max(heightAt(this.pos.x, this.pos.z), WATER - 1.1);
     if (face !== null) this.yaw = turnTo(this.yaw, face, dt * 7);
@@ -251,6 +288,153 @@ export class Actor {
     }
     m.armR.rotation.x = lerp(m.armR.rotation.x, ar, Math.min(1, dt * 22));
     if (d.weapon2) m.armL.rotation.x = lerp(m.armL.rotation.x, this.wind > 0 ? -1.6 : -0.35 - sw * 0.25, Math.min(1, dt * 16));
+  }
+}
+
+// 決戰圈：沿地形起伏的發光圍幕（疊加發光，下亮上淡；不依賴逐像素透明度，手機 GPU 也穩定）
+let arenaTex = null;
+function arenaTexture() {
+  if (arenaTex) return arenaTex;
+  const c = document.createElement('canvas'); c.width = 4; c.height = 64; const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 64);
+  gr.addColorStop(0, '#000'); gr.addColorStop(0.55, '#5a2a08'); gr.addColorStop(1, '#ffc860'); // 疊加發光：黑色＝不發光
+  g.fillStyle = gr; g.fillRect(0, 0, 4, 64);
+  arenaTex = new THREE.CanvasTexture(c); arenaTex.colorSpace = THREE.SRGBColorSpace; return arenaTex;
+}
+function arenaBand(cx, cz, R, y0, y1, mat) {
+  const N = 96, pos = [], uv = [], idx = [];
+  for (let i = 0; i <= N; i++) {
+    const a = i / N * PI * 2, x = cx + Math.cos(a) * R, z = cz + Math.sin(a) * R, y = heightAt(x, z);
+    pos.push(x, y + y0, z, x, y + y1, z);
+    uv.push(i / N, 0, i / N, 1);
+    if (i < N) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  const m = new THREE.Mesh(g, mat); m.frustumCulled = false; m.renderOrder = 2; return m;
+}
+function makeArena(cx, cz, R) {
+  const mat = new THREE.MeshBasicMaterial({ map: arenaTexture(), transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, depthWrite: false, fog: false });
+  const stripe = new THREE.MeshBasicMaterial({ color: 0xff9a20, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, fog: false });
+  const mesh = new THREE.Group();
+  mesh.add(arenaBand(cx, cz, R, -0.2, 1.9, mat), arenaBand(cx, cz, R, -0.15, 0.32, stripe)); // 發光圍幕 + 白天也看得清楚的地面色帶
+  G.scene.add(mesh);
+  return { R, mesh, mat };
+}
+
+// =====================================================================
+//  侍從：不會攻擊、不會受傷，定時替玩家採集物資
+// =====================================================================
+export class Attendant {
+  constructor(spec, x, z, o = {}) {
+    const d = ATTENDANTS[spec];
+    this.id = 'attendant'; this.spec = spec; this.name = d.name; this.faction = 'ally';
+    this.def = { title: `${d.role}・${d.desc}`, noncombat: true };
+    this.pos = new THREE.Vector3(x, heightAt(x, z), z); this.yaw = 0;
+    this.inv = o.inv || {}; this.focus = o.focus || null; this.wait = !!o.wait; this.cap = 10;
+    this.state = 'idle'; this.node = null; this.t = o.first ? 12 : rnd(20, 35); this.walkPh = 0; this.curSpeed = 0;
+    this.stuckT = 0; this.wp = [0, 0]; this.wpT = 0; this.alive = true;
+    this.waitPos = o.waitPos || { x, z };
+    const m = this.m = humanoid(d.look, null, null, 0.92);
+    const l = makeLabel(d.name, '#ffe08a'); l.material.sizeAttenuation = false; l.scale.set(0.26, 0.065, 1); l.position.y = 2.15; m.root.add(l);
+    m.root.position.copy(this.pos); G.scene.add(m.root); G.attendants.push(this);
+  }
+  get radius() { return 0.38; }
+  get carried() { let n = 0; for (const k in this.inv) n += this.inv[k]; return n; }
+  kinds() { // 依專長或玩家指定，決定要採哪些資源點
+    const f = this.focus || this.spec;
+    return f === 'wood' ? ['tree'] : f === 'ore' ? ['ore'] : f === 'herb' ? ['herb', 'bush'] : ['tree', 'ore', 'herb', 'bush'];
+  }
+  pickNode() {
+    const P = G.player, c = this.wait ? this.waitPos : P.pos, ks = this.kinds();
+    let best = null, bs = 1e9;
+    world.nodes.query(c.x, c.z, 32, n => {
+      if (!ks.includes(n.kind)) return;
+      if (n.kind === 'tree') { if (Math.min(3, n.stock + Math.floor((G.now - n.last) / 45)) <= 0) return; }
+      else if (n.stock <= 0) return;
+      const dc = dist2(n.x, n.z, c.x, c.z); if (dc > 32) return;
+      const sc = dc + rnd(6) + (n.kind === 'ore' && !this.focus && this.spec === 'all' ? -4 : 0);
+      if (sc < bs) { bs = sc; best = n; }
+    });
+    return best;
+  }
+  harvest(n) {
+    const bonus = (this.focus || this.spec) !== 'all' && this.spec !== 'all' && this.kinds().includes(n.kind) ? 2 : 1;
+    let item, k = bonus;
+    if (n.kind === 'tree') {
+      n.stock = Math.min(3, n.stock + Math.floor((G.now - n.last) / 45)); if (n.stock <= 0) return null;
+      n.stock--; n.last = G.now; item = 'wood';
+    } else {
+      if (n.stock <= 0) return null;
+      n.stock--; item = n.item; if (n.item === 'berry') k = 2 * bonus;
+      if (n.stock <= 0) { n.mesh.visible = false; n.respawn = 220; }
+    }
+    k = Math.min(k, this.cap - this.carried); if (k <= 0) return null;
+    this.inv[item] = (this.inv[item] || 0) + k;
+    return [item, k];
+  }
+  handOver() {
+    const got = [];
+    for (const k in this.inv) if (this.inv[k] > 0) { G.player.give(k, this.inv[k]); got.push(`${ITEMS[k].i}${ITEMS[k].n}×${this.inv[k]}`); }
+    this.inv = {}; return got;
+  }
+  update(dt) {
+    const P = G.player, m = this.m, dp = d2(this.pos, P.pos);
+    let goal = null, speed = 0, face = null;
+    this.t -= dt;
+    if (this.state === 'idle') {
+      const home = this.wait ? this.waitPos : null;
+      if (!this.wait) {
+        if (dp > 70) { this.pos.set(P.pos.x - Math.sin(P.yaw) * 3 + rnd(-1, 1), 0, P.pos.z - Math.cos(P.yaw) * 3 + rnd(-1, 1)); }
+        else if (dp > 4.5) { goal = P.pos; speed = dp > 14 ? (P.mount ? 15 : 8.8) : 4.5; }
+        else face = Math.atan2(P.pos.x - this.pos.x, P.pos.z - this.pos.z);
+      } else if (dist2(this.pos.x, this.pos.z, home.x, home.z) > 1.2) { goal = home; speed = 4.5; }
+      if (this.t <= 0) {
+        this.t = rnd(25, 40);
+        if (this.carried >= this.cap) { if (!this.fullMsg) { this.fullMsg = true; G.ui.msg(`${this.name}：「我身上裝滿了，找我拿東西吧！」`, 'say'); } }
+        else if (!P.mount || this.wait) { const n = this.pickNode(); if (n) { this.node = n; this.state = 'go'; this.goT = 0; } }
+      }
+    } else if (this.state === 'go') {
+      const n = this.node, nd = dist2(this.pos.x, this.pos.z, n.x, n.z);
+      this.goT += dt;
+      if (!this.wait && dp > 50) this.state = 'idle';
+      else if (nd < (n.kind === 'tree' ? 1.8 : 1.6)) { this.state = 'work'; this.workT = 2.2; }
+      else { goal = n; speed = 5.5; if (this.goT > 14) { this.pos.set(n.x + 1.2, 0, n.z + 1.2); } }
+    } else if (this.state === 'work') {
+      face = Math.atan2(this.node.x - this.pos.x, this.node.z - this.pos.z);
+      this.workT -= dt;
+      if (Math.floor(this.workT * 2.5) !== Math.floor((this.workT + dt) * 2.5)) audio.playAt('chop', dp, 0.5);
+      if (this.workT <= 0) {
+        const r = this.harvest(this.node); this.node = null; this.state = 'idle';
+        if (r) { this.fullMsg = false; G.ui.msg(`${this.name} 採到 ${ITEMS[r[0]].i}${ITEMS[r[0]].n} ×${r[1]}（身上 ${this.carried}/${this.cap}，找他交談可領取）`, 'get'); }
+      }
+    }
+    if (goal && speed > 0) {
+      this.wpT -= dt;
+      if (this.wpT <= 0) { this.wpT = 0.3; world.route(this.pos.x, this.pos.z, goal.x, goal.z, this.wp); }
+      let mx = this.wp[0] - this.pos.x, mz = this.wp[1] - this.pos.z; const l = Math.hypot(mx, mz) || 1; mx /= l; mz /= l;
+      if (heightAt(this.pos.x, this.pos.z) < WATER - 0.2) speed *= 0.55;
+      const ox = this.pos.x, oz = this.pos.z;
+      this.pos.x += mx * speed * dt; this.pos.z += mz * speed * dt;
+      world.resolve(this.pos, this.radius);
+      if (Math.hypot(this.pos.x - ox, this.pos.z - oz) < speed * dt * 0.3) { this.stuckT += dt; if (this.stuckT > 2.5) { this.stuckT = 0; this.pos.x += mx * 2.5 + rnd(-1, 1); this.pos.z += mz * 2.5 + rnd(-1, 1); } }
+      else this.stuckT = 0;
+      face = Math.atan2(mx, mz);
+    }
+    // 不要擋住玩家
+    const px = this.pos.x - P.pos.x, pz = this.pos.z - P.pos.z, pd = Math.hypot(px, pz);
+    if (pd < 1 && pd > 1e-3) { this.pos.x = P.pos.x + px / pd; this.pos.z = P.pos.z + pz / pd; }
+    this.curSpeed = lerp(this.curSpeed, goal ? speed : 0, Math.min(1, dt * 8));
+    this.pos.y = Math.max(heightAt(this.pos.x, this.pos.z), WATER - 1.1);
+    if (face !== null) this.yaw = turnTo(this.yaw, face, dt * 7);
+    m.root.visible = dp < 240;
+    m.root.position.copy(this.pos); m.root.rotation.y = this.yaw;
+    this.walkPh += this.curSpeed * dt * 2.1;
+    const sw = Math.sin(this.walkPh) * clamp(this.curSpeed / 4.5, 0, 1) * 0.75;
+    m.legL.rotation.x = sw; m.legR.rotation.x = -sw; m.armL.rotation.x = -sw * 0.7;
+    m.armR.rotation.x = this.state === 'work' ? -1.2 - Math.sin(G.now * 12) * 0.9 : sw * 0.7;
   }
 }
 
@@ -384,8 +568,8 @@ export function updateProjectiles(dt) {
           if (!a.alive || a === p.owner || (a.faction === 'enemy') === enemyShot || a.def.noncombat) continue;
           if (hitsBody(p.pos, a, a.radius + 0.25, 1.95 * a.scale + a.seat)) {
             const head = p.pos.y > a.pos.y + a.seat + 1.48 * a.scale;
-            a.damage(p.dmg * (head ? 2 : 1), p.owner); dead = true;
-            if (fromPlayer) G.ui.hitmarker(head); fxBurst(p.pos, 0x8a0a0a, 6, 2.5, 0.4);
+            const hit = a.damage(p.dmg * (head ? 2 : 1), p.owner); dead = true;
+            if (hit !== false) { if (fromPlayer) G.ui.hitmarker(head); fxBurst(p.pos, 0x8a0a0a, 6, 2.5, 0.4); }
             break;
           }
         }

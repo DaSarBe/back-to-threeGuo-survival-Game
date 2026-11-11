@@ -58,6 +58,7 @@ export const player = {
     const lost = Math.floor(this.count('coin') * 0.3); if (lost) this.inv.coin -= lost;
     this.kx = this.kz = 0; this.vy = 0;
     for (const a of G.actors) if (a.target === this) { a.target = null; a.alert = 0; }
+    if (G.onRespawn) G.onRespawn();
     G.ui.msg(lost ? `你被救回營地，遺失了 ${lost} 枚五銖錢。` : '你在一陣暈眩中醒來……', 'warn'); G.ui.dirty = true;
   },
 
@@ -139,8 +140,8 @@ export const player = {
     for (const a of G.animals) { const h = a.rayHit(o, T); if (h && h.t < bt) { bt = h.t; best = a; best._head = false; } }
     V.copy(o).addScaledVector(T, bt);
     if (best) {
-      const head = best._head; best.damage(w.dmg * (head ? 2 : 1), this);
-      G.ui.hitmarker(head, !best.alive); fxBurst(V, 0x9a0a0a, 7, 3, 0.4, 0.12);
+      const head = best._head, hit = best.damage(w.dmg * (head ? 2 : 1), this);
+      if (hit !== false) { G.ui.hitmarker(head, !best.alive); fxBurst(V, 0x9a0a0a, 7, 3, 0.4, 0.12); }
     } else if (bt < w.range) fxBurst(V, 0x9a8a6a, 5, 2.5, 0.35, 0.1);
     if (muzzle) fxTracer(muzzle.getWorldPosition(new THREE.Vector3()), V.clone());
   },
@@ -151,8 +152,8 @@ export const player = {
       const dx = a.pos.x - this.pos.x, dz = a.pos.z - this.pos.z, d = Math.hypot(dx, dz);
       if (d > reach + a.radius || Math.abs(a.pos.y - this.pos.y) > 3) return;
       if (d > 0.8 && (dx * D.x + dz * D.z) / d < 0.45) return;
-      a.damage(w.dmg * (0.9 + rnd(0.25)) * (this.mount && this.mount.speed > 8 ? 1.5 : 1), this); n++;
-      V.set(a.pos.x, a.pos.y + 1.2, a.pos.z); fxBurst(V, 0x9a0a0a, 6, 3, 0.4, 0.12);
+      if (a.damage(w.dmg * (0.9 + rnd(0.25)) * (this.mount && this.mount.speed > 8 ? 1.5 : 1), this) === false) return;
+      n++; V.set(a.pos.x, a.pos.y + 1.2, a.pos.z); fxBurst(V, 0x9a0a0a, 6, 3, 0.4, 0.12);
     };
     for (const a of G.actors) if (a.alive && a.faction === 'enemy' && n < 3) test(a);
     for (const a of G.animals) if (a.alive && a.kind !== 'horse' && n < 3) test(a);
@@ -176,6 +177,7 @@ function findInteract() {
     const s = d + (1 - dot) * 3; if (s < bs) { bs = s; best = { label, act }; }
   };
   for (const a of G.actors) if (a.alive && a.def.general && a.faction === 'ally') consider(a.pos.x, a.pos.z, 3.6, `與 ${a.name} 交談`, () => G.ui.talk(a));
+  for (const a of G.attendants) consider(a.pos.x, a.pos.z, 3.2, `與侍從 ${a.name} 交談` + (a.carried ? `（帶著 ${a.carried} 件）` : ''), () => G.ui.talk(a));
   for (const h of G.animals) if (h.kind === 'horse' && h.alive) consider(h.pos.x, h.pos.z, 3.4, h.tamed ? `騎乘 ${h.name}` : `馴服並騎乘 ${h.name}`, () => P.mountHorse(h));
   world.nodes.query(P.pos.x, P.pos.z, 3.6, n => {
     if (n.kind === 'tree') consider(n.x, n.z, n.bamboo ? 5 : 2.6, n.bamboo ? '砍伐竹子' : '砍伐樹木', () => gather(n));
@@ -342,6 +344,7 @@ export function initInput(canvas) {
     else if (G.noLock && (e.buttons & 2)) look(e.movementX, e.movementY, sens * 1.5);
   });
   canvas.addEventListener('mousedown', e => {
+    if (G.menu === 'cutscene') { G.skipCutscene(); return; }
     if (G.menu) return;
     audio.init();
     if (!G.noLock && !G.touch && document.pointerLockElement !== canvas) { lock(); return; }
@@ -352,6 +355,7 @@ export function initInput(canvas) {
   document.addEventListener('wheel', e => { if (!G.menu) P.cycle(e.deltaY > 0 ? 1 : -1); }, { passive: true });
   document.addEventListener('keydown', e => {
     if (e.code === 'Tab') e.preventDefault();
+    if (G.menu === 'cutscene') { if (!e.repeat) G.skipCutscene(); return; }
     if (G.menu) {
       if ((e.code === 'Escape' || e.code === 'Tab' || e.code === 'KeyC') && !e.repeat) G.ui.escape();
       return;
@@ -359,7 +363,7 @@ export function initInput(canvas) {
     if (e.repeat) return;
     keys[e.code] = true;
     if (e.code.startsWith('Digit')) { const i = +e.code.slice(5) - 1; if (HOTBAR[i]) { if (P.owned[HOTBAR[i]]) P.equip(HOTBAR[i]); else G.ui.msg(`尚未取得 ${WEAPONS[HOTBAR[i]].n}。`, 'info'); } }
-    else act({ KeyE: 'interact', Space: 'jump', KeyR: 'reload', KeyG: 'grenade', KeyF: 'eat', KeyH: 'heal', KeyZ: 'drink', KeyX: 'whistle', Tab: 'menu', KeyC: 'menu', KeyI: 'menu', KeyM: 'music', Escape: 'pause', KeyP: 'pause' }[e.code]);
+    else act({ KeyE: 'interact', Space: 'jump', KeyR: 'reload', KeyG: 'grenade', KeyF: 'eat', KeyH: 'heal', KeyZ: 'drink', KeyX: 'whistle', Tab: 'menu', KeyC: 'menu', KeyI: 'menu', KeyM: 'music', KeyV: 'command', Escape: 'pause', KeyP: 'pause' }[e.code]);
   });
   document.addEventListener('keyup', e => { keys[e.code] = false; });
   window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.l = mouse.r = false; });
@@ -367,6 +371,7 @@ export function initInput(canvas) {
   // ---- 觸控 ----
   const joy = document.getElementById('joy'), knob = document.getElementById('joyknob');
   const tstart = e => {
+    if (G.menu === 'cutscene') { G.skipCutscene(); e.preventDefault(); return; }
     if (G.menu) return; audio.init();
     for (const t of e.changedTouches) {
       const sl = t.target.closest && t.target.closest('[data-slot]');
@@ -431,6 +436,7 @@ function act(a) {
     case 'next': P.cycle(1); break;
     case 'menu': G.ui.open('inv'); break;
     case 'pause': G.ui.open('pause'); break;
+    case 'command': G.cycleCommand(); break;
     case 'music': G.ui.msg(audio.toggleMusic() ? '配樂：開' : '配樂：關', 'info'); break;
   }
 }

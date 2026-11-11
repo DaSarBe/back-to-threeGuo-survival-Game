@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { G } from './state.js';
 import { world, buildWorld, updateSky, updateNodes, heightAt, inSite, SITES } from './world.js';
-import { player, updatePlayer, initInput } from './player.js';
+import { player, updatePlayer, initInput, resetInput } from './player.js';
 import { Actor, Animal, updateProjectiles, updatePickups, updateEffects, initFx } from './entities.js';
 import { ui } from './ui.js';
 import { audio } from './audio.js';
 import { checkQuest } from './quests.js';
+import { spawnRecruit, giveAttendant, reslot, followers, cycleCommand } from './squad.js';
 import { rnd, rndInt, pick, dist2 } from './util.js';
 
 const PI = Math.PI, KEY = 'sanguo-arms-dealer-save-v1';
@@ -73,6 +74,16 @@ function start(save) {
   }
   populate();
   if (save && save.p.horse) { const h = spawnHorse(P.pos.x + 3, P.pos.z + 2, save.p.horse === 'red'); h.tame(); P.horse = h; }
+  if (save) { // 還原隨行部隊與侍從
+    const around = i => { const ang = P.yaw + Math.PI + (i - 1.5) * 0.6; return [P.pos.x - Math.sin(ang) * -6, P.pos.z - Math.cos(ang) * -6]; }; // 身後散開
+    let i = 0;
+    for (const [id, r] of save.squad || []) { const [x, z] = around(i++); spawnRecruit(id, x, z, r); }
+    for (const id of save.gens || []) { const a = G.actors.find(x => x.id === id); if (a) { const [x, z] = around(i++); a.follow = true; a.pos.set(x, 0, z); } }
+    reslot();
+    if (save.att) for (const o of save.att) giveAttendant(o.spec, P.pos.x + rnd(-2, 2), P.pos.z + rnd(-2, 2), o);
+    else if (G.stage >= 1) giveAttendant('all'); // 舊存檔：補發劉備贈送的侍從
+    if (save.cmd === 'attack') G.squadCmd = 'attack';
+  }
   if (G.flags.crate) for (const n of world.nodeList) if (n.kind === 'crate') n.stock = 0;
   if (G.flags.redHare && !(save && save.p.horse === 'red')) G.spawnRedHare();
   started = true; G.started = true; showRotateHint(G.touch && innerWidth < innerHeight);
@@ -160,12 +171,33 @@ G.sleep = () => {
     onDawn(); ui.fade(false); ui.msg(`一夜無事。第 ${G.day} 日清晨，進度已儲存。`, 'get'); G.save();
   }, 800);
 };
+const UNLOCK_MSG = {
+  zhangjiao: '關羽、張飛願意與你並肩作戰了！回劉備軍營邀請他們同行。',
+  huaxiong: '趙雲、曹操、孫堅願意與你同行了！（演義中華雄是關羽溫酒所斬——這回你搶先了一步。）',
+  lvbu: '劉備決定親自隨你出征！',
+};
 G.onKill = (a) => {
-  if (a.def.boss) { ui.msg(`${a.name} 已被擊敗！`, 'quest'); audio.play('horn', 0.8); checkQuest(); }
+  if (a.def.boss) {
+    ui.msg(`${a.name} 已被擊敗！`, 'quest'); audio.play('horn', 0.8); checkQuest();
+    if (UNLOCK_MSG[a.id]) setTimeout(() => ui.msg('🔓 ' + UNLOCK_MSG[a.id], 'quest'), 1800);
+  }
+};
+G.cycleCommand = cycleCommand;
+// 玩家倒下被救回營地：隨行部隊與侍從一起撤回
+G.onRespawn = () => {
+  const P = player;
+  if (G.squadCmd === 'hold') { G.squadCmd = 'follow'; G.holdPos = null; }
+  for (const a of followers()) { a.target = null; a.pos.set(P.pos.x + rnd(-4, 4), 0, P.pos.z + rnd(-4, 4)); }
+  for (const a of G.attendants) { a.wait = false; a.state = 'idle'; a.node = null; a.pos.set(P.pos.x + rnd(-2, 2), 0, P.pos.z + rnd(-2, 2)); }
+  if (followers().length) ui.msg('隨行部隊護送你撤回了營地。', 'info');
 };
 G.save = () => {
   const P = player; if (!started || !P.alive) return;
-  const d = { v: 1, stage: G.stage, killed: G.killed, day: G.day, time: G.time, flags: G.flags, p: { x: P.pos.x, z: P.pos.z, yaw: P.yaw, hp: P.hp, hunger: P.hunger, thirst: P.thirst, inv: P.inv, owned: P.owned, mags: P.mags, armor: P.armor, canteen: P.canteen, cur: P.cur, horse: P.horse ? (P.horse.name === '赤兔馬' ? 'red' : 'yes') : null } };
+  const d = { v: 1, stage: G.stage, killed: G.killed, day: G.day, time: G.time, flags: G.flags, p: { x: P.pos.x, z: P.pos.z, yaw: P.yaw, hp: P.hp, hunger: P.hunger, thirst: P.thirst, inv: P.inv, owned: P.owned, mags: P.mags, armor: P.armor, canteen: P.canteen, cur: P.cur, horse: P.horse ? (P.horse.name === '赤兔馬' ? 'red' : 'yes') : null },
+    squad: followers().filter(a => a.recruited).map(a => [a.id, +(a.hp / a.maxHp).toFixed(2)]),
+    gens: followers().filter(a => a.def.general).map(a => a.id),
+    att: G.attendants.map(a => ({ spec: a.spec, inv: a.inv, focus: a.focus, wait: a.wait, waitPos: a.waitPos })),
+    cmd: G.squadCmd };
   try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { }
 };
 
@@ -250,6 +282,50 @@ function adaptResolution(t) {
   if (s !== resScale) { resScale = s; G.renderer.setPixelRatio(basePR * s); G.renderer.setSize(innerWidth, innerHeight, false); }
 }
 
+// ------------------------------------------------------------------ 開戰動畫
+const M4 = new THREE.Matrix4(), UP = new THREE.Vector3(0, 1, 0), QA = new THREE.Quaternion(), QB = new THREE.Quaternion();
+const ease = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+const lookQ = (eye, target, out) => out.setFromRotationMatrix(M4.lookAt(eye, target, UP));
+function checkArena() {
+  if (!player.alive) return;
+  for (const a of G.actors) if (a.alive && a.arena && !G.flags['intro_' + a.id] && a.inArena(player)) { startCutscene(a); return; }
+}
+function startCutscene(boss) {
+  G.flags['intro_' + boss.id] = true;
+  const cam = G.camera, P = player, s = boss.scale;
+  const dx = P.pos.x - boss.pos.x, dz = P.pos.z - boss.pos.z, d = Math.hypot(dx, dz) || 1, fx = dx / d, fz = dz / d;
+  boss.yaw = Math.atan2(dx, dz); boss.m.root.rotation.y = boss.yaw; boss.wind = 0;
+  const yb = boss.pos.y + boss.seat;
+  const mk = (dist, side, h) => { const x = boss.pos.x + fx * dist - fz * side, z = boss.pos.z + fz * dist + fx * side; return new THREE.Vector3(x, Math.max(yb + h * s, heightAt(x, z) + 1), z); };
+  G.cutscene = {
+    boss, t: 0, p0: cam.position.clone(), q0: cam.quaternion.clone(),
+    a: mk(9, 3.5, 3.2), b: mk(3.4 * s, 1.0, 1.75), look: new THREE.Vector3(boss.pos.x, yb + 1.5 * s, boss.pos.z), horn: false, vis: [],
+  };
+  for (const c of cam.children) { G.cutscene.vis.push([c, c.visible]); c.visible = false; }
+  resetInput(); G.menu = 'cutscene'; ui.cine(true, boss); ui.prompt(null);
+}
+function updateCutscene(dt) {
+  const c = G.cutscene, cam = G.camera, b = c.boss, t = (c.t += dt);
+  if (t < 1.0) { const k = ease(t); cam.position.lerpVectors(c.p0, c.a, k); lookQ(c.a, c.look, QA); cam.quaternion.slerpQuaternions(c.q0, QA, k); }
+  else if (t < 3.8) { cam.position.lerpVectors(c.a, c.b, ease((t - 1) / 2.8)); lookQ(cam.position, c.look, cam.quaternion); }
+  else { const k = ease((t - 3.8) / 0.8); cam.position.lerpVectors(c.b, c.p0, k); lookQ(c.b, c.look, QA); cam.quaternion.slerpQuaternions(QA, c.q0, k); }
+  if (t > 1.1 && !c.horn) { c.horn = true; audio.play('horn', 0.9); }
+  // 敵將舉起兵器
+  const raise = t > 1.4 && t < 3.4 ? -2.7 : -0.35;
+  b.m.armR.rotation.x += (raise - b.m.armR.rotation.x) * Math.min(1, dt * 6);
+  if (t > 1.4 && t < 1.4 + dt) audio.play('clang', 0.6);
+  ui.cineStep(t > 1.1 && t < 4.0, t > 1.7 && t < 4.0 ? b.def.line : null);
+  if (t >= 4.6) endCutscene();
+}
+function endCutscene() {
+  const c = G.cutscene; if (!c) return;
+  for (const [o, v] of c.vis) o.visible = v;
+  G.cutscene = null; G.menu = null; ui.cine(false);
+  c.boss.alert = 30; c.boss.target = player; c.boss.atkT = 1;
+  ui.msg(`⚔ 與 ${c.boss.name} 決戰！在決戰圈內才能傷到他，離開圈子他會慢慢回復。`, 'quest');
+}
+G.skipCutscene = () => endCutscene();
+
 // ------------------------------------------------------------------ 主迴圈
 function frame(t) {
   requestAnimationFrame(frame);
@@ -265,11 +341,15 @@ function frame(t) {
     updatePlayer(dt);
     for (const a of G.actors) a.update(dt);
     for (const a of G.animals) a.update(dt);
+    for (const a of G.attendants) a.update(dt);
     separate();
+    checkArena();
     updateProjectiles(dt); updatePickups(dt); updateEffects(dt); updateNodes(dt);
     updateSky(dt, cam.position);
     ui.update(dt);
     adaptResolution(t);
+  } else if (G.menu === 'cutscene') {
+    updateCutscene(dt); updateSky(dt, cam.position);
   }
   G.renderer.render(G.scene, cam);
 }
