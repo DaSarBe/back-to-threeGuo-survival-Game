@@ -29,7 +29,7 @@
     <div id="clock"></div>
   </div>
   <div id="quest" data-act="quest"><div id="quest-t"></div><div id="quest-d"></div><div id="quest-dist"></div><div id="quest-orders"></div></div>
-  <canvas id="minimap" width="150" height="150" data-act="map" title="點擊放大地圖（M）"></canvas><div id="minimap-hint">⤢</div>
+  <canvas id="minimap" width="150" height="150" data-act="map" title="點擊放大地圖（M）"></canvas><div id="minimap-hint" data-icon="expand"></div>
   <div id="followers"></div>
 
   <div id="boss" class="hidden"><div id="boss-name"></div><div class="bar"><div id="boss-fill"></div></div></div>
@@ -37,11 +37,11 @@
   <div id="prompt" class="hidden" data-act="interact"></div>
 
   <div id="stats">
-    <div class="stat"><span>❤️</span><div class="bar"><div id="b-hp" class="fill hp"></div></div></div>
-    <div class="stat"><span>🍖</span><div class="bar"><div id="b-hunger" class="fill hunger"></div></div></div>
-    <div class="stat"><span>💧</span><div class="bar"><div id="b-thirst" class="fill thirst"></div></div></div>
-    <div class="stat"><span>⚡</span><div class="bar"><div id="b-stamina" class="fill stamina"></div></div></div>
-    <div class="stat hidden" id="st-damp" title="火藥受潮"><span>🧨</span><div class="bar"><div id="b-damp" class="fill damp"></div></div></div>
+    <div class="stat st-hp"><span data-icon="heart"></span><div class="bar"><div id="b-hp" class="fill hp"></div></div></div>
+    <div class="stat st-food"><span data-icon="food"></span><div class="bar"><div id="b-hunger" class="fill hunger"></div></div></div>
+    <div class="stat st-water"><span data-icon="drop"></span><div class="bar"><div id="b-thirst" class="fill thirst"></div></div></div>
+    <div class="stat st-sta"><span data-icon="bolt"></span><div class="bar"><div id="b-stamina" class="fill stamina"></div></div></div>
+    <div class="stat hidden" id="st-damp" title="火藥受潮"><span data-icon="damp"></span><div class="bar"><div id="b-damp" class="fill damp"></div></div></div>
   </div>
   <div id="hotbar"></div>
   <div id="ammo"><div id="ammo-n"></div><div id="ammo-w"></div><div id="quick"></div></div>
@@ -49,22 +49,22 @@
 
 <div id="touch" class="hidden">
   <div id="joy"><div id="joyknob"></div></div>
-  <div class="tb" data-act="fire" id="t-fire">開火</div>
-  <div class="tb" data-act="fire" id="t-fire2">開火</div>
-  <div class="tb" data-act="aim" id="t-aim">瞄準</div>
-  <div class="tb" data-act="jump" id="t-jump">跳躍</div>
-  <div class="tb" data-act="reload" id="t-r">換彈</div>
+  <div class="tb" data-act="fire" id="t-fire" data-icon="fire" data-label="開火"></div>
+  <div class="tb" data-act="fire" id="t-fire2" data-icon="fire" data-label="開火"></div>
+  <div class="tb" data-act="aim" id="t-aim" data-icon="aim" data-label="瞄準"></div>
+  <div class="tb" data-act="jump" id="t-jump" data-icon="jump" data-label="跳躍"></div>
+  <div class="tb" data-act="reload" id="t-r" data-icon="reload" data-label="換彈"></div>
   <div id="t-quick">
-    <div class="tb sm" data-act="eat">🍖<b id="q-food"></b></div>
-    <div class="tb sm" data-act="drink">💧<b id="q-water"></b></div>
-    <div class="tb sm" data-act="heal">💊<b id="q-med"></b></div>
-    <div class="tb sm" data-act="throw"><span id="q-throw-i">💣</span><b id="q-gren"></b></div>
-    <div class="tb sm hidden" data-act="cyclethrow" id="q-cycle">↻</div>
-    <div class="tb sm" data-act="whistle">🐴</div>
-    <div class="tb sm" data-act="command">⚑<b id="q-cmd">跟</b></div>
+    <div class="tb sm" data-act="eat" data-icon="food" title="進食"><b id="q-food"></b></div>
+    <div class="tb sm" data-act="drink" data-icon="water" title="喝水"><b id="q-water"></b></div>
+    <div class="tb sm" data-act="heal" data-icon="medicine" title="金瘡藥"><b id="q-med"></b></div>
+    <div class="tb sm" data-act="throw"><span id="q-throw-i"></span><b id="q-gren"></b></div>
+    <div class="tb sm hidden" data-act="cyclethrow" id="q-cycle" data-icon="cycle" title="切換投擲物"></div>
+    <div class="tb sm" data-act="whistle" data-icon="horse" title="喚馬"></div>
+    <div class="tb sm" data-act="command" data-icon="flag" title="隊伍指令"><b id="q-cmd">跟</b></div>
   </div>
-  <div class="tb sm" data-act="menu" id="t-m">🎒</div>
-  <div class="tb sm" data-act="pause" id="t-p">⏸</div>
+  <div class="tb sm" data-act="menu" id="t-m" data-icon="bag" title="背包"></div>
+  <div class="tb sm" data-act="pause" id="t-p" data-icon="pause" title="暫停"></div>
 </div>
 
 <div id="fade"></div>
@@ -125,7 +125,7 @@
     <div class="btns">
       <button id="btn-continue" class="hidden">繼續遊戲</button>
       <button id="btn-new">開始新遊戲</button>
-      <button data-settings class="ghost">⚙️ 設定</button>
+      <button data-settings class="ghost" data-icon="gear" data-label="設定"></button>
     </div>
     <p id="loading" class="dim">載入中……</p>
   </div>
@@ -135,13 +135,13 @@
   <div class="panel">
     <h2>暫停</h2>
     <p class="dim">進度會自動儲存於此瀏覽器。</p>
-    <div class="btns col"><button data-close>繼續遊戲</button><button id="btn-save">立即存檔</button><button data-settings>⚙️ 設定</button><button id="btn-intro">🎬 重看開場動畫</button><button id="btn-music">切換配樂</button></div>
+    <div class="btns col"><button data-close data-icon="play" data-label="繼續遊戲"></button><button id="btn-save" data-icon="save" data-label="立即存檔"></button><button data-settings data-icon="gear" data-label="設定"></button><button id="btn-intro" data-icon="film" data-label="重看開場動畫"></button><button id="btn-music" data-icon="music" data-label="切換配樂"></button></div>
   </div>
 </div>
 
 <div id="menu-inv" class="menu hidden">
   <div class="panel wide tall">
-    <div class="tabs"><button data-tab="craft" class="on">🔧 製作</button><button data-tab="bag">🎒 背包</button><button data-tab="orders">📜 訂單</button><button data-tab="map">🗺️ 地圖</button><button data-close class="x">✕</button></div>
+    <div class="tabs"><button data-tab="craft" class="on" data-icon="craft" data-label="製作"></button><button data-tab="bag" data-icon="bag" data-label="背包"></button><button data-tab="orders" data-icon="scroll" data-label="訂單"></button><button data-tab="map" data-icon="map" data-label="地圖"></button><button data-close class="x">✕</button></div>
     <div id="tab-craft" class="tab"></div>
     <div id="tab-bag" class="tab hidden"></div>
     <div id="tab-orders" class="tab hidden"></div>
@@ -170,8 +170,8 @@
 
 <div id="menu-map" class="menu hidden">
   <div class="panel map-panel">
-    <div class="tabs"><span class="ttl">🗺️ 天下輿圖</span><span id="map-pos" class="dim"></span>
-      <button id="map-zin" title="放大">＋</button><button id="map-zout" title="縮小">－</button><button id="map-me">⌖ 我</button><button id="map-all">全圖</button><button data-close class="x">✕</button></div>
+    <div class="tabs"><span class="ttl" data-icon="map" data-label="天下輿圖"></span><span id="map-pos" class="dim"></span>
+      <button id="map-zin" title="放大">＋</button><button id="map-zout" title="縮小">－</button><button id="map-me" data-icon="target" data-label="我"></button><button id="map-all">全圖</button><button data-close class="x">✕</button></div>
     <div class="map-body">
       <div id="map-wrap"><canvas id="worldmap"></canvas></div>
       <div class="map-legend">

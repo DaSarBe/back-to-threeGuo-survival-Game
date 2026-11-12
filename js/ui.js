@@ -6,6 +6,7 @@ import { angDiff } from './util.js';
 import { QUESTS, dialogFor, questSite } from './quests.js';
 import { BM, gunRate } from './blackmarket.js';
 import { drawMap, openMap, initMapUI } from './mapview.js';
+import { icon, applyIcons, WEAPON_ICON } from './icons.js';
 import { resetInput } from './player.js';
 import { SQUAD_CMDS } from './data.js';
 import { followers, squadUsed, squadCap } from './squad.js';
@@ -29,7 +30,8 @@ export const ui = {
     $('btn-music').onclick = () => ui.msg(audio.toggleMusic() ? '配樂：開' : '配樂：關', 'info');
     $('btn-save').onclick = () => { G.save(); ui.msg('已存檔。', 'info'); };
     $('btn-intro').onclick = () => G.replayIntro();
-    initMapUI();
+    initMapUI(); applyIcons();
+    addEventListener('resize', () => { ui.dirty = true; }); // 轉向時重算快捷列格子大小
     $('tab-map').insertAdjacentHTML('afterbegin', '<p class="dim" style="margin:0 0 6px">提示：點右上角小地圖（電腦按 M）可開啟能縮放的大地圖。</p>');
     document.querySelectorAll('[data-settings]').forEach(b => b.onclick = () => ui.openSettings());
     $('settings-back').onclick = () => ui.closeSettings();
@@ -124,7 +126,7 @@ export const ui = {
   renderBag() {
     const P = G.player, box = $('tab-bag');
     let h = `<h3>兵器</h3><div class="grid">`;
-    for (const w of HOTBAR) if (P.owned[w]) h += `<div class="cell">${WEAPONS[w].i} ${WEAPONS[w].n}<b>${HOTBAR.indexOf(w) + 1}</b></div>`;
+    for (const w of HOTBAR) if (P.owned[w]) h += `<div class="cell">${icon(WEAPON_ICON(w))} ${WEAPONS[w].n}</div>`;
     h += `</div><h3>物品　<span class="dim">水囊 ${P.canteen}/3　護甲減傷 ${Math.round(P.armor * 100)}%</span></h3><div class="grid">`;
     let any = false;
     for (const it in ITEMS) if (P.count(it) > 0) {
@@ -227,17 +229,22 @@ export const ui = {
     if (this.dirty || P.reloadT > 0 !== last.rl) {
       this.dirty = false; last.rl = P.reloadT > 0;
       const w = WEAPONS[P.cur];
-      el.hotbar.innerHTML = HOTBAR.filter(id => P.owned[id]).map((id, i) => `<div class="slot ${P.cur === id ? 'on' : ''}" data-slot="${id}"><small>${i < 10 ? (i + 1) % 10 : ''}</small>${WEAPONS[id].i}<em>${WEAPONS[id].n}</em></div>`).join(''); // 只顯示已擁有的兵器
-      el['ammo-w'].textContent = w.n + (P.reloadT > 0 ? '　換彈中…' : '');
+      const own = HOTBAR.filter(id => P.owned[id]);
+      if (G.touch) { // 手機：兵器多時縮小格子，避免擋到右側按鍵
+        const land = innerWidth > innerHeight, avail = land ? innerWidth - 260 * (G.settings.btn || 1) - 16 : innerWidth - 16;
+        el.hotbar.style.setProperty('--slot', Math.max(22, Math.min(42, Math.floor(avail / own.length) - 3)) + 'px');
+      }
+      el.hotbar.innerHTML = own.map((id, i) => `<div class="slot ${P.cur === id ? 'on' : ''}" data-slot="${id}"><small>${i < 10 ? (i + 1) % 10 : ''}</small>${icon(WEAPON_ICON(id))}<em>${WEAPONS[id].n}</em></div>`).join(''); // 只顯示已擁有的兵器
+      el['ammo-w'].innerHTML = icon(WEAPON_ICON(P.cur)) + ' ' + w.n + (P.reloadT > 0 ? '　換彈中…' : '');
       el['ammo-n'].innerHTML = w.type === 'gun' ? `${P.mags[P.cur]} <small>/ ${w.ammo ? P.count(w.ammo) : '∞'}</small>` : w.type === 'bow' ? `${P.count('arrow')} <small>箭</small>` : '';
       const food = P.count('cooked') + P.count('ration') + P.count('berry') + P.count('meat');
       if (G.touch) {
         $('q-cmd').textContent = SQUAD_CMDS.find(c => c.id === G.squadCmd).s; $('q-food').textContent = food; $('q-water').textContent = P.canteen; $('q-med').textContent = P.count('medicine');
         if (P.count(P.thrown) <= 0) { const o = P.ownedThrowables(); if (o.length) P.thrown = o[0]; }
-        $('q-throw-i').textContent = ITEMS[P.thrown].i; $('q-gren').textContent = P.count(P.thrown);
+        $('q-throw-i').innerHTML = icon(P.thrown); $('q-gren').textContent = P.count(P.thrown);
         $('q-cycle').classList.toggle('hidden', P.ownedThrowables().length < 2);
       }
-      el.quick.innerHTML = `💣 ${P.count('grenade')} <kbd>G</kbd>　🔥 ${P.count('firebomb')} <kbd>T</kbd>　🔘 ${P.count('mine')} <kbd>B</kbd><br>🍖 ${food} <kbd>F</kbd>　💧 ${P.canteen}/3 <kbd>Z</kbd>　💊 ${P.count('medicine')} <kbd>H</kbd><br>🪙 ${P.count('coin')}`;
+      el.quick.innerHTML = `${icon('grenade')} ${P.count('grenade')} <kbd>G</kbd>　${icon('firebomb')} ${P.count('firebomb')} <kbd>T</kbd>　${icon('mine')} ${P.count('mine')} <kbd>B</kbd><br>${icon('food')} ${food} <kbd>F</kbd>　${icon('water')} ${P.canteen}/3 <kbd>Z</kbd>　${icon('medicine')} ${P.count('medicine')} <kbd>H</kbd><br><span class="coin">${icon('coin')} ${P.count('coin')}</span>`;
     }
 
     // 任務與羅盤

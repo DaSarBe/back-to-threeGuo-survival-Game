@@ -112,7 +112,7 @@ html, body { -webkit-touch-callout: none; overscroll-behavior: none; }
 #t-quick .tb { position: relative; }
 #t-m { right: calc(116px + var(--sr)); top: calc(8px + var(--st)); } #t-p { right: calc(116px + 48px * var(--bs, 1) + var(--sr)); top: calc(8px + var(--st)); }
 
-body.touch #hotbar { bottom: calc(6px + var(--sb)); gap: 4px; pointer-events: auto; }
+body.touch #hotbar { bottom: calc(6px + var(--sb)); gap: 3px; pointer-events: auto; }
 body.touch .slot { width: 42px; height: 42px; font-size: 20px; line-height: 38px; } body.touch .slot em, body.touch .slot small { display: none; }
 body.touch #quest { top: calc(6px + var(--st)); left: calc(8px + var(--sl)); max-width: 32vw; padding: 4px 8px; pointer-events: auto; }
 body.touch #quest-t { font-size: 13px; } body.touch #quest-dist { font-size: 11px; margin: 0; }
@@ -235,3 +235,28 @@ body.touch .map-panel { height: 100%; padding: 8px 10px; } body.touch .map-legen
 body.touch .map-panel .tabs button { padding: 4px 9px; font-size: 13px; min-height: 34px; } body.touch #map-pos { display: none; }
 body.menu-open #rotate-hint { display: none !important; }
 @media (max-aspect-ratio: 1/1) { .map-panel .map-legend, body.touch .map-panel .map-legend { width: 100%; font-size: 12px; } }
+
+/* ---------- 遊戲內圖示（js/icons.js） ---------- */
+.ic { width: 1.25em; height: 1.25em; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: -0.28em; flex: none; overflow: visible; }
+.ic .f { fill: currentColor; fill-opacity: .22; }
+button .ic { margin-right: 4px; }
+.tb { flex-direction: column; color: #f4d98a; gap: 1px; line-height: 1; }
+.tb .ic { width: calc(26px * var(--bs, 1)); height: calc(26px * var(--bs, 1)); filter: drop-shadow(0 1px 1px rgba(0,0,0,.8)); }
+.tb .lb { font-size: calc(10px * var(--bs, 1)); color: #f4e8c8; letter-spacing: .05em; }
+.tb.sm .ic { width: calc(23px * var(--bs, 1)); height: calc(23px * var(--bs, 1)); }
+#t-fire, #t-fire2 { color: #ffe6b0; } #t-fire .ic { width: calc(36px * var(--bs, 1)); height: calc(36px * var(--bs, 1)); } #t-fire2 .ic { width: calc(30px * var(--bs, 1)); height: calc(30px * var(--bs, 1)); }
+#t-fire .lb { font-size: calc(12px * var(--bs, 1)); } #t-r .ic { width: calc(22px * var(--bs, 1)); height: calc(22px * var(--bs, 1)); } #t-r .lb { font-size: calc(9px * var(--bs, 1)); }
+#q-throw-i { display: flex; }
+.slot { display: flex; align-items: center; justify-content: center; color: #f4d98a; }
+.slot .ic { width: 30px; height: 30px; stroke-width: 1.7; filter: drop-shadow(0 1px 1px #000); } .slot.on .ic { color: #fff2c0; }
+body.touch .slot .ic { width: 26px; height: 26px; }
+.stat > span { display: flex; } .stat .ic { width: 18px; height: 18px; filter: drop-shadow(0 1px 1px #000); }
+.st-hp { color: #ff7a64; } .st-food { color: #f0a848; } .st-water { color: #6ac0f4; } .st-sta { color: #c4ec5a; } #st-damp { color: #a8bcd4; }
+body.touch .stat .ic { width: 13px; height: 13px; }
+#quick .ic { color: #f4d98a; width: 1.15em; height: 1.15em; } #quick .coin { color: #f4d98a; }
+#ammo-w .ic { width: 1.2em; height: 1.2em; }
+#minimap-hint { display: flex; align-items: center; justify-content: center; } #minimap-hint .ic { width: 13px; height: 13px; stroke-width: 2.2; }
+.tabs button .ic, .tabs .ttl .ic { width: 1.15em; height: 1.15em; } .cell .ic { width: 1.3em; height: 1.3em; color: #f4d98a; }
+body.touch .slot { width: var(--slot, 42px); height: var(--slot, 42px); }
+body.touch .slot .ic { width: calc(var(--slot, 42px) * .62); height: calc(var(--slot, 42px) * .62); }
+@media (orientation: landscape) { body.touch #hotbar { left: calc(8px + var(--sl) + (100vw - 260px * var(--bs, 1)) / 2); } }

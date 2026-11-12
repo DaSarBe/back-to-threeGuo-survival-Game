@@ -81,6 +81,8 @@ js/workshop.js  軍火工坊與武器改良
 js/chapters.js  官渡、長坂坡、赤壁章節事件
 js/blackmarket.js 黑市、軍火外流與結局
 js/intro.js     開場動畫
+js/icons.js     遊戲內圖示（SVG 線條圖示，取代 emoji）
+js/mapview.js   大地圖
 js/weather.js   天氣與火藥受潮
 js/settings.js  玩家設定
 js/ui.js  js/quests.js  js/data.js  js/audio.js  js/util.js  js/state.js
