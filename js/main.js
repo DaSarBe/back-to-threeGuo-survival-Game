@@ -16,6 +16,8 @@ import { BM, loadBM, ending } from './blackmarket.js';
 import { playIntro, updateIntro, skipIntro } from './intro.js';
 import { syncOutposts, setDeviceActive, outposts, siteVisible } from './world.js';
 import { spawnAkai, updateAkai, AK, akai, joined, addBond } from './akai.js';
+import { updateBarks } from './barks.js';
+import { initLayout, applyLayout, openLayoutEditor, cancelLayout } from './layout.js';
 import { openHub, openDevice, openMail, updateMail, updateWind, onStageDevice, deviceStatus, homeEnding } from './device.js';
 import { playLvbuDeath, playGoHome, updateStory, skipStory } from './story.js';
 import { rnd, rndInt, pick, dist2 } from './util.js';
@@ -35,7 +37,8 @@ function init() {
   const scene = G.scene = new THREE.Scene();
   const camera = G.camera = new THREE.PerspectiveCamera(74, 1, 0.08, 2400); camera.rotation.order = 'YXZ'; scene.add(camera);
   G.world = world; G.player = player; G.ui = ui;
-  buildWorld(scene); initFx(scene); ui.init(); initInput(canvas);
+  buildWorld(scene); initFx(scene); ui.init(); initInput(canvas); initLayout();
+  G.openLayoutEditor = openLayoutEditor; G.cancelLayout = cancelLayout;
   G.applySettings('all'); initWorkshopUI();
   const resize = () => {
     const w = innerWidth, h = innerHeight, asp = w / h;
@@ -424,6 +427,7 @@ G.applySettings = (key = 'all') => {
   const all = key === 'all';
   if (all || key === 'sfx' || key === 'music') audio.setVolumes(S.sfx, S.music);
   if (all || key === 'btn') document.body.style.setProperty('--bs', S.btn);
+  if (all || key === 'layout') applyLayout();
   if (all || key === 'quality') {
     const q = quality();
     basePR = Math.min(devicePixelRatio || 1, q.pr); resScale = 1; resHold = 0;
@@ -463,6 +467,7 @@ function frame(t) {
   } else if (G.menu === 'cutscene') {
     updateCutscene(dt); updateSky(dt, cam.position);
   }
+  if (started) updateBarks(G.menu ? 0 : dt); // 選單開著時泡泡暫停並隱藏
   G.renderer.render(G.renderScene || G.scene, cam);
 }
 

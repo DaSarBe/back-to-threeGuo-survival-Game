@@ -260,3 +260,34 @@ body.touch .stat .ic { width: 13px; height: 13px; }
 body.touch .slot { width: var(--slot, 42px); height: var(--slot, 42px); }
 body.touch .slot .ic { width: calc(var(--slot, 42px) * .62); height: calc(var(--slot, 42px) * .62); }
 @media (orientation: landscape) { body.touch #hotbar { left: calc(8px + var(--sl) + (100vw - 260px * var(--bs, 1)) / 2); } }
+
+/* ---------- 自訂按鍵配置 ---------- */
+body.custom-layout #t-quick { display: contents; }
+body.custom-layout #t-quick .tb { position: absolute; }
+body.joy-fixed #joy { display: block; opacity: .75; }
+body.layout-edit #hud, body.layout-edit #touch { display: block !important; }
+body.layout-edit #game { filter: brightness(.55) saturate(.7); }
+body.layout-edit #touch { background-image: linear-gradient(rgba(122,224,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(122,224,255,.07) 1px, transparent 1px); background-size: 5vw 5vw; }
+body.layout-edit [data-ename] { pointer-events: auto !important; touch-action: none; cursor: move; outline: 2px dashed rgba(122,224,255,.85); outline-offset: 3px; }
+body.layout-edit [data-ename].lb-sel { outline: 3px solid #ffd24a; box-shadow: 0 0 16px rgba(255,210,74,.6); }
+body.layout-edit .tb[data-ename]::after, body.layout-edit #hotbar::after, body.layout-edit #ammo::after, body.layout-edit #prompt::after, body.layout-edit #joy::after {
+  content: attr(data-ename); position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, -6px); white-space: nowrap; font-size: 10px; line-height: 1; padding: 2px 5px; border-radius: 8px; background: rgba(10,30,40,.85); color: #bff0ff; pointer-events: none; text-shadow: none; letter-spacing: 0; }
+body.layout-edit #hotbar .slot:empty { background: rgba(212,175,55,.25); }
+#layout-bar { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 40; background: rgba(20,16,10,.9); border: 2px solid #d4af37; border-radius: 10px; padding: 6px 8px; display: flex; flex-direction: column; gap: 5px; align-items: stretch; width: min(460px, 94vw); box-shadow: 0 6px 24px rgba(0,0,0,.6); transition: opacity .15s; }
+#layout-bar[data-pos="top"] { top: calc(46px + var(--st)); transform: translateX(-50%); }
+#layout-bar[data-pos="bot"] { top: auto; bottom: calc(6px + var(--sb)); transform: translateX(-50%); }
+body.lb-dragging #layout-bar { opacity: .15; pointer-events: none; }
+#layout-bar .lb-tip { font-size: 11px; color: #c8b890; text-align: center; }
+#layout-bar .lb-row { display: flex; gap: 5px; align-items: center; justify-content: center; }
+#layout-bar .lb-row.wrap { flex-wrap: wrap; }
+#layout-bar b { color: #ffd24a; font-size: 13px; flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 9.5em; }
+#layout-bar button { min-height: 32px; padding: 3px 8px; font-size: 13px; flex: 1 1 auto; }
+#layout-bar button[data-lb="minus"], #layout-bar button[data-lb="plus"] { flex: 0 0 34px; font-size: 18px; padding: 0; }
+#layout-bar button[data-lb="move"] { flex: 0 0 38px; padding: 0; font-size: 16px; }
+#layout-bar input[type=range] { flex: 1 1 60px; min-width: 50px; accent-color: #c8402a; }
+#layout-bar #lb-pct { width: 2.8em; text-align: right; font-size: 12px; color: #f4e8c8; }
+#layout-bar .lb-done { background: #8a5a10; border-color: #ffd24a; color: #fff; font-weight: bold; }
+#layout-bar button:disabled { opacity: .4; }
+.set-row .set-wide { flex: 1; padding: 6px 10px; font-size: 14px; }
+.set-row .set-wide + span { width: 5.5em; font-size: 12px; color: #c8b890; }
+@media (max-height: 430px) { #layout-bar .lb-tip { display: none; } #layout-bar button { min-height: 28px; } }

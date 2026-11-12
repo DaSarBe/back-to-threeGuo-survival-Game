@@ -7,6 +7,7 @@ import { audio } from './audio.js';
 import { clamp, lerp, rnd, rndInt, pick, dist2, angDiff, turnTo, raySphere, makeLabel } from './util.js';
 import { damageTargets } from './world.js';
 import { raining } from './weather.js';
+import { bark, idleChatter, say } from './barks.js';
 
 const PI = Math.PI;
 const V = new THREE.Vector3(), V2 = new THREE.Vector3();
@@ -45,8 +46,30 @@ export class Actor {
     this.alert = 0; this.wanderT = rnd(1, 5); this.dest = null; this.retT = rnd(0.5);
     this.specialT = 3 + rnd(2); this.charge = 0; this.summoned = 0; this.deathT = 0;
     this.stuckT = 0; this.sideT = 0; this.sideDir = 0; this.farT = 0; this.wp = [0, 0]; this.wpT = 0; this.wpGoal = null;
+    // 動作與台詞
+    this.emo = null; this.emoT = rnd(2, 8); this.flinch = 0; this.cheer = 0; this.ph0 = rnd(6); this.barkT = rnd(5, 16); this.fightT = rnd(4, 8);
+    this.circDir = Math.random() < 0.5 ? 1 : -1; this.circT = rnd(1, 3); this.lowSaid = false; this.lookAt = null;
   }
   get radius() { return (this.horse ? 0.9 : 0.42) * this.scale; }
+  // 播放一個動作（閒置小動作、抱拳、吶喊、歡呼…）
+  emote(k, dur) {
+    const D = { look: 3.2, stretch: 2.2, scratch: 2, yawn: 2.4, beard: 3, flourish: 1.8, sharpen: 4, sit: rnd(9, 16), salute: 1.6, chat: 2.6, warcry: 0.8, cheer: 1.4 };
+    this.emo = { k, t: 0, dur: dur || D[k] || 2 };
+  }
+  idleEmote() {
+    const d = this.def, night = world.isNight, look = d.look || {};
+    let pool;
+    if (d.boss) pool = ['look', 'flourish', 'look'];
+    else if (d.general) pool = ['look', 'flourish', 'stretch', ...(look.beard ? ['beard', 'beard'] : [])];
+    else if (d.talk) pool = ['look', 'stretch', 'scratch'];
+    else {
+      pool = ['look', 'look', 'stretch', 'scratch', 'sharpen'];
+      if (night) pool.push('yawn', 'yawn');
+      if (!this.horse && (!this.follow || G.squadCmd === 'hold') && this.homeYaw === undefined) pool.push('sit', night ? 'sit' : 'look');
+    }
+    if (this.horse) pool = pool.filter(k => k !== 'sit');
+    this.emote(pick(pool));
+  }
 
   rayHit(o, d) {
     if (!this.alive) return null;
@@ -71,6 +94,11 @@ export class Actor {
     }
     if (this.def.boss && src instanceof Actor) n *= 0.4;
     this.hp -= n; this.alert = 12;
+    if (this.hp > 0) {
+      this.flinch = 0.28; if (this.emo && this.emo.k !== 'warcry') this.emo = null;
+      if (!this.lowSaid && this.hp < this.maxHp * (this.def.boss ? 0.25 : 0.3)) { this.lowSaid = true; bark(this, 'low', this.def.boss || this.def.general ? 1 : 0.6); }
+      else bark(this, 'hurt', this.def.boss ? 0.25 : 0.3);
+    }
     if (src && src !== this && src.alive !== false && (!this.target || src === G.player || Math.random() < 0.3)) {
       if (!(src.faction && src.faction === this.faction)) this.target = src;
     }
@@ -91,7 +119,14 @@ export class Actor {
       G.ui.msg(`${d.name} 負傷，退回營中休養。`, 'warn');
       return;
     }
-    this.alive = false; this.target = null;
+    this.alive = false; this.target = null; this.emo = null;
+    this.m.inner.rotation.set(0, 0, 0); this.m.inner.position.set(0, this.seat, 0); // 倒地前恢復站姿
+    if (!fled) bark(this, 'die', d.boss ? 0 : 0.35);
+    if (src instanceof Actor && src.alive) { src.cheer = 1.3; bark(src, 'kill', 0.5); }
+    else if (src === G.player && this.faction === 'enemy') { // 隊友替你喝采
+      const f = G.actors.find(a => a.alive && a.follow && !a.target && d2(a.pos, G.player.pos) < 16);
+      if (f) bark(f, 'cheer', 0.2);
+    }
     if (this.arena) { G.scene.remove(this.arena.mesh); this.arena = null; }
     if (this.recruited) { this.follow = false; G.ui.msg(`${d.name} 陣亡了。（可再向主公招募）`, 'warn'); }
     if (this.faction === 'enemy') {
@@ -168,6 +203,7 @@ export class Actor {
 
     // ---- 目標 ----
     this.retT -= dt;
+    const hadTarget = !!this.target;
     if (this.retT <= 0 && !d.noncombat) {
       this.retT = 0.45 + rnd(0.2);
       const t = this.target;
@@ -183,6 +219,12 @@ export class Actor {
       { const nt = this.findTarget(); if (nt) this.target = nt; } // 每次重新評估目標（敵人會改打靠近的隊友）
       if (!this.roam && !this.follow && this.target && dist2(this.pos.x, this.pos.z, this.home.x, this.home.z) > (this.faction === 'ally' ? 45 : 150)) { this.target = null; this.alert = 0; }
     }
+    if (!hadTarget && this.target) { // 發現敵人：吶喊、舉起兵器
+      this.emo = null; this.lookAt = null;
+      if (!d.ranged && !d.boss && Math.random() < 0.6) this.emote('warcry');
+      bark(this, d.boss ? 'fight' : 'spot', d.boss ? 0.6 : 0.5);
+    }
+    if (this.emo) { const e = this.emo; e.t += dt; if (e.t >= e.dur || (this.target && e.k !== 'warcry')) { this.emo = null; this.emoT = rnd(4, 10); } }
 
     let mx = 0, mz = 0, speed = 0, face = null, goal = null;
     const tg = this.target;
@@ -197,11 +239,16 @@ export class Actor {
         if (this.wind > 0) { /* 拉弓中 */ }
         else if (dist > 30) { goal = tg.pos; speed = d.speed; }
         else if (dist < 7) { mx = -dx / dist; mz = -dz / dist; speed = d.speed * 0.8; }
-        else if (this.atkT <= 0) { this.wind = this.windTot = 0.75; }
+        else if (this.atkT <= 0) { this.wind = this.windTot = 0.75; bark(this, 'attack', 0.12); }
       } else {
         if (dist > reach * 0.85 && this.wind <= 0) { goal = tg.pos; speed = d.speed * (dist > 12 ? 1.15 : 1); }
-        if (dist < reach && this.atkT <= 0 && this.wind <= 0) { this.wind = this.windTot = d.boss ? 0.42 : 0.5; audio.playAt('swing', dp, 0.6); }
+        if (dist < reach && this.atkT <= 0 && this.wind <= 0) { this.wind = this.windTot = d.boss ? 0.42 : 0.5; audio.playAt('swing', dp, 0.6); bark(this, 'attack', 0.15); }
+        else if (dist <= reach * 0.85 && this.wind <= 0 && this.atkT > 0.35 && !d.boss && !this.horse) { // 等待出手時繞著對手移步
+          this.circT -= dt; if (this.circT <= 0) { this.circT = rnd(1.2, 2.8); this.circDir = -this.circDir; }
+          mx = -dz / dist * this.circDir; mz = dx / dist * this.circDir; speed = d.speed * 0.3;
+        }
       }
+      if (d.boss) { this.fightT -= dt; if (this.fightT <= 0) { this.fightT = rnd(9, 15); bark(this, 'fight', 0.8); } }
       // 攻擊結算
       if (this.wind > 0) {
         this.wind -= dt;
@@ -273,13 +320,17 @@ export class Actor {
       // 無目標：回崗位 / 閒晃
       const hx = this.home.x - this.pos.x, hz = this.home.z - this.pos.z, hd = Math.hypot(hx, hz);
       const still = d.general || d.boss || this.faction === 'ally';
+      const chat = this.lookAt && G.now < this.lookAt.until ? Math.atan2(this.lookAt.x - this.pos.x, this.lookAt.z - this.pos.z) : null;
       if (still) {
         if (hd > 1.5) { goal = this.home; speed = d.speed * 0.8; }
+        else if (chat !== null) face = chat;
         else if (dp < 10) face = Math.atan2(P.pos.x - this.pos.x, P.pos.z - this.pos.z);
         else if (this.homeYaw !== undefined) face = this.homeYaw;
       } else {
         this.wanderT -= dt;
         if (this.wanderT <= 0) { this.wanderT = rnd(3, 9); const a = rnd(PI * 2), r = rnd(2, this.roam ? 18 : 10); this.dest = { x: this.home.x + Math.cos(a) * r, z: this.home.z + Math.sin(a) * r }; }
+        if (this.emo || chat !== null) this.dest = null; // 做小動作或聊天時站著不動
+        if (chat !== null) face = chat;
         if (this.dest) {
           const ex = this.dest.x - this.pos.x, ez = this.dest.z - this.pos.z, ed = Math.hypot(ex, ez);
           if (ed > 1) { goal = this.dest; speed = d.speed * (hd > 30 ? 0.9 : 0.35); } else this.dest = null;
@@ -309,6 +360,15 @@ export class Actor {
         if (this.stuckT > 0.45) { this.stuckT = 0; this.sideDir = this.sideT > 0 ? -this.sideDir : (this.sideDir || (Math.random() < 0.5 ? 1 : -1)); this.sideT = 2.2; }
       } else this.stuckT = Math.max(0, this.stuckT - dt);
     }
+    // ---- 閒置：打招呼、小動作、自言自語／閒聊 ----
+    if (this.emo && speed > 0.5 && this.emo.k !== 'warcry') this.emo = null;
+    if (!tg) {
+      if (this.faction === 'ally' && !this.follow && P.alive && dp < 6 && G.now - (this.greetT || -99) > 45) { this.greetT = G.now; if (!this.horse) this.emote('salute'); bark(this, 'greet', 0.75); }
+      if (speed === 0 && this.curSpeed < 0.4) {
+        if (!this.emo) { this.emoT -= dt; if (this.emoT <= 0) this.idleEmote(); }
+        this.barkT -= dt; if (this.barkT <= 0) { this.barkT = rnd(10, 24); idleChatter(this, G.actors); }
+      }
+    }
     if (this.follow && G.squadCmd !== 'hold' && !tg && dp > 24) { this.farT += dt; if (this.farT > 9) { this.farT = 0; this.pos.set(P.pos.x - Math.sin(P.yaw + PI) * -4 + rnd(-2, 2), 0, P.pos.z - Math.cos(P.yaw + PI) * -4 + rnd(-2, 2)); } } else this.farT = 0;
     if (G.battle && G.battle.mode === 'duel' && this.faction === 'ally' && G.battle.boss.arena) { // 單挑：友軍退到圈外
       const B = G.battle.boss, ax = this.pos.x - B.home.x, az = this.pos.z - B.home.z, ad = Math.hypot(ax, az) || 1, R = B.arena.R + 1.5;
@@ -328,19 +388,64 @@ export class Actor {
 
     // ---- 動畫 ----
     this.walkPh += this.curSpeed * dt * 2.1;
-    const sw = Math.sin(this.walkPh) * clamp(this.curSpeed / 4.5, 0, 1) * 0.75;
+    const sw = Math.sin(this.walkPh) * clamp(this.curSpeed / 4.5, 0, 1) * 0.75, t = G.now;
+    // 基本姿勢：走路擺臂
+    let aLx = d.weapon2 ? -0.35 - sw * 0.25 : -sw * 0.7, aLz = 0, aRx = -0.35 + sw * 0.25, aRz = 0;
+    let lLx = sw, lRx = -sw, lz = 0, iRx = 0, iRy = 0, iY = 0, iZ = 0;
+    if (tg && !this.horse) { // 對戰架勢：兵器舉在身前、微蹲、重心起伏
+      if (d.gun) { aRx = -1.3; aLx = -1.2; aLz = 0.45; }
+      else if (d.ranged) { aRx = -0.9; aLx = d.weapon2 ? -0.6 : -0.5; }
+      else if (this.curSpeed < 3.5) {
+        aRx = -0.85 + Math.sin(t * 5 + this.ph0) * 0.06; if (!d.weapon2) { aLx = -0.75; aLz = 0.35; } else aLx = -0.8;
+        lz = 0.07; iRx = 0.08; iY = -0.03 + Math.abs(Math.sin(t * 6 + this.ph0)) * 0.02;
+      }
+    }
+    const e = this.emo;
+    if (e && (!tg || e.k === 'warcry')) { // 小動作（淡入淡出）
+      const et = e.t, r = Math.min(1, et * 4, (e.dur - et) * 4), mix = (a, b) => a + (b - a) * r;
+      switch (e.k) {
+        case 'look': iRy = Math.sin(et / e.dur * PI * 2) * 0.7 * r; break;
+        case 'stretch': aLx = mix(aLx, -2.9); aRx = mix(aRx, -2.9); aLz = mix(aLz, -0.3); aRz = mix(aRz, 0.3); iRx = mix(iRx, -0.1); break;
+        case 'yawn': aLx = mix(aLx, -2.6); aRx = mix(aRx, -2.6); aLz = mix(aLz, -0.55); aRz = mix(aRz, 0.55); iRx = mix(iRx, -0.18); break;
+        case 'scratch': aLx = mix(aLx, -2.5 + Math.sin(et * 16) * 0.12); aLz = mix(aLz, 0.6); iRy = mix(iRy, 0.15); break;
+        case 'beard': aLx = mix(aLx, -1.75 + Math.sin(et * 3) * 0.12); aLz = mix(aLz, 0.55); iRx = mix(iRx, -0.05); break;
+        case 'flourish': aRx = mix(aRx, -1.4 + Math.sin(et * 9) * 1.1); iRy = mix(iRy, Math.sin(et * 9) * 0.25); break;
+        case 'sharpen': aRx = mix(aRx, -1.0 + Math.sin(et * 11) * 0.12); aLx = mix(aLx, -1.05); aLz = mix(aLz, 0.5); iRx = mix(iRx, 0.15); break;
+        case 'sit': lLx = lRx = mix(lLx, -1.45); lz = mix(lz, 0.12); iY = mix(iY, -0.62); aLx = mix(aLx, -0.5); aRx = mix(aRx, -0.45); break;
+        case 'salute': aLx = mix(aLx, -1.5); aLz = mix(aLz, 0.6); aRx = mix(aRx, -1.5); aRz = mix(aRz, -0.6); iRx = mix(iRx, 0.14); break; // 抱拳
+        case 'chat': aRx = mix(aRx, -0.9 + Math.sin(et * 5) * 0.35); aRz = mix(aRz, -0.25); iRy = mix(iRy, Math.sin(et * 1.3) * 0.15); break;
+        case 'warcry': aRx = mix(aRx, -2.8); iRx = mix(iRx, -0.12); break;
+      }
+    }
+    if (this.cheer > 0) { this.cheer -= dt; if (!tg) { aRx = -2.9 + Math.sin(t * 14) * 0.15; iRx = -0.06; } } // 擊倒對手後舉起兵器
+    if (this.wind > 0) { // 出手
+      const p = 1 - this.wind / this.windTot;
+      if (d.gun) { aRx = -1.5; aLx = -1.45; aLz = 0.45; }
+      else if (d.ranged) { aRx = -1.5; aLx = -1.5; aLz = 0.45; iRy = -0.2; } // 拉弓
+      else {
+        aRx = p < 0.6 ? lerp(-0.6, -2.8, p / 0.6) : lerp(-2.8, -0.2, (p - 0.6) / 0.4);
+        iRy = p < 0.6 ? -0.3 * (p / 0.6) : lerp(-0.3, 0.35, (p - 0.6) / 0.4); // 扭腰揮擊
+        if (p > 0.6) { iZ = 0.14; iRx = 0.16; }
+        if (d.weapon2) aLx = -1.6;
+      }
+    }
+    if (this.charge > 0) { aRx = -1.3; iRx = 0.22; }
+    if (this.flinch > 0) { this.flinch -= dt; const f = Math.max(0, this.flinch / 0.28); iRx -= 0.3 * f; aLx -= 0.6 * f; aLz -= 0.3 * f; } // 受擊後仰
+    if (this.hp < this.maxHp * 0.3 && !d.boss && !this.horse && !(e && e.k === 'sit')) iRx += 0.12; // 重傷佝僂
+
+    const k = Math.min(1, dt * 12), kl = Math.min(1, dt * 18);
+    m.armR.rotation.x = lerp(m.armR.rotation.x, aRx, Math.min(1, dt * 22)); m.armR.rotation.z = lerp(m.armR.rotation.z, aRz, k);
+    m.armL.rotation.x = lerp(m.armL.rotation.x, aLx, Math.min(1, dt * 16)); m.armL.rotation.z = lerp(m.armL.rotation.z, aLz, k);
+    m.inner.rotation.x = lerp(m.inner.rotation.x, iRx, k); m.inner.rotation.y = lerp(m.inner.rotation.y, iRy, k); m.inner.position.z = lerp(m.inner.position.z, iZ, k);
     if (this.horse) {
       const l = this.horse.legs; l[0].rotation.x = sw; l[3].rotation.x = sw; l[1].rotation.x = -sw; l[2].rotation.x = -sw;
       m.inner.position.y = this.seat + Math.abs(Math.sin(this.walkPh)) * 0.05 * clamp(this.curSpeed / 4, 0, 1);
-    } else { m.legL.rotation.x = sw; m.legR.rotation.x = -sw; m.body.position.y = Math.abs(sw) * 0.04; }
-    if (!d.weapon2) m.armL.rotation.x = -sw * 0.7;
-    let ar = -0.35 + sw * 0.25;
-    if (this.wind > 0) {
-      const p = 1 - this.wind / this.windTot;
-      ar = d.ranged ? -1.5 : (p < 0.6 ? lerp(-0.35, -2.8, p / 0.6) : lerp(-2.8, -0.2, (p - 0.6) / 0.4));
+    } else {
+      m.legL.rotation.x = lerp(m.legL.rotation.x, lLx, kl); m.legR.rotation.x = lerp(m.legR.rotation.x, lRx, kl);
+      m.legL.rotation.z = lerp(m.legL.rotation.z, -lz, k); m.legR.rotation.z = lerp(m.legR.rotation.z, lz, k);
+      m.inner.position.y = lerp(m.inner.position.y, iY * this.scale, k);
+      m.body.position.y = Math.abs(sw) * 0.04 + Math.sin(t * 1.9 + this.ph0) * 0.006; // 走路起伏＋呼吸
     }
-    m.armR.rotation.x = lerp(m.armR.rotation.x, ar, Math.min(1, dt * 22));
-    if (d.weapon2) m.armL.rotation.x = lerp(m.armL.rotation.x, this.wind > 0 ? -1.6 : -0.35 - sw * 0.25, Math.min(1, dt * 16));
   }
 }
 
@@ -380,6 +485,14 @@ function makeArena(cx, cz, R) {
 // =====================================================================
 //  侍從：不會攻擊、不會受傷，定時替玩家採集物資
 // =====================================================================
+// 侍從的台詞
+const ATT_LINES = {
+  go: { tree: ['我去砍點柴！', '那邊有木材！'], ore: ['我去挖礦！', '那塊石頭看起來有鐵！'], herb: ['我去採藥！', '那邊有草藥！'], berry: ['那裡有野果！'], any: ['我去撿點東西！'] },
+  done: ['採到了！', '搞定！', '嘿咻——好重。'],
+  idle: ['先生，要不要歇會兒？', '這附近好像有草藥。', '我腳好痠……', '先生的火器好厲害！', '今天天氣不錯呢。'],
+  night: ['天黑了，我有點怕……', '先生，晚上別走太遠。'],
+  fear: ['哇！打起來了！', '先生小心！', '別、別過來！', '我躲遠一點……'],
+};
 export class Attendant {
   constructor(spec, x, z, o = {}) {
     const d = ATTENDANTS[spec];
@@ -389,6 +502,7 @@ export class Attendant {
     this.inv = o.inv || {}; this.focus = o.focus || null; this.wait = !!o.wait; this.ws = !!o.ws; this.cap = 10;
     this.state = 'idle'; this.node = null; this.t = o.first ? 12 : rnd(20, 35); this.walkPh = 0; this.curSpeed = 0;
     this.stuckT = 0; this.wp = [0, 0]; this.wpT = 0; this.alive = true;
+    this.bubbleY = 2.6; this.fearT = rnd(0.6); this.scared = false; this.chatT = rnd(20, 40);
     this.waitPos = o.waitPos || { x, z };
     const m = this.m = humanoid(d.look, null, null, 0.92);
     const l = makeLabel(d.name, '#ffe08a'); l.material.sizeAttenuation = false; l.scale.set(0.26, 0.065, 1); l.position.y = 2.15; m.root.add(l);
@@ -447,8 +561,15 @@ export class Attendant {
       if (this.t <= 0) {
         this.t = rnd(25, 40);
         if (this.carried >= this.cap) { if (!this.fullMsg) { this.fullMsg = true; G.ui.msg(`${this.name}：「我身上裝滿了，找我拿東西吧！」`, 'say'); } }
-        else if (!P.mount || this.wait) { const n = this.pickNode(); if (n) { this.node = n; this.state = 'go'; this.goT = 0; } }
+        else if (!P.mount || this.wait) {
+          const n = this.pickNode();
+          if (n) {
+            this.node = n; this.state = 'go'; this.goT = 0;
+            if (dp < 25 && Math.random() < 0.5) { const g = ATT_LINES.go; say(this, pick(n.kind === 'tree' ? g.tree : n.kind === 'ore' ? g.ore : n.item === 'herb' ? g.herb : n.item === 'berry' ? g.berry : g.any)); }
+          }
+        }
       }
+      if (!goal && dp < 12 && (this.chatT -= dt) <= 0) { this.chatT = rnd(30, 55); say(this, pick(world.isNight && Math.random() < 0.5 ? ATT_LINES.night : ATT_LINES.idle)); }
     } else if (this.state === 'go') {
       const n = this.node, nd = dist2(this.pos.x, this.pos.z, n.x, n.z);
       this.goT += dt;
@@ -462,7 +583,7 @@ export class Attendant {
       if (this.workT <= 0) {
         const r = this.harvest(this.node); this.node = null; this.state = 'idle';
         if (r && this.ws && G.wsDeposit) { G.wsDeposit(this); this.fullMsg = false; } // 派駐工坊：直接存進工坊倉庫
-        else if (r) { this.fullMsg = false; G.ui.msg(`${this.name} 採到 ${ITEMS[r[0]].i}${ITEMS[r[0]].n} ×${r[1]}（身上 ${this.carried}/${this.cap}，找他交談可領取）`, 'get'); }
+        else if (r) { this.fullMsg = false; if (dp < 25 && Math.random() < 0.5) say(this, pick(ATT_LINES.done)); G.ui.msg(`${this.name} 採到 ${ITEMS[r[0]].i}${ITEMS[r[0]].n} ×${r[1]}（身上 ${this.carried}/${this.cap}，找他交談可領取）`, 'get'); }
       }
     }
     if (goal && speed > 0) {
@@ -486,10 +607,22 @@ export class Attendant {
     if (face !== null) this.yaw = turnTo(this.yaw, face, dt * 7);
     m.root.visible = dp < 240;
     m.root.position.copy(this.pos); m.root.rotation.y = this.yaw;
+    // 附近開打時抱頭（站著時蹲下發抖）
+    this.fearT -= dt;
+    if (this.fearT <= 0) {
+      this.fearT = 0.6;
+      const was = this.scared;
+      this.scared = !this.ws && G.actors.some(a => a.alive && a.faction === 'enemy' && a.target && Math.hypot(a.pos.x - this.pos.x, a.pos.z - this.pos.z) < 20);
+      if (this.scared && !was && dp < 30 && G.now > (this.fearCd || 0)) { this.fearCd = G.now + rnd(12, 20); say(this, pick(ATT_LINES.fear)); }
+    }
     this.walkPh += this.curSpeed * dt * 2.1;
-    const sw = Math.sin(this.walkPh) * clamp(this.curSpeed / 4.5, 0, 1) * 0.75;
-    m.legL.rotation.x = sw; m.legR.rotation.x = -sw; m.armL.rotation.x = -sw * 0.7;
-    m.armR.rotation.x = this.state === 'work' ? -1.2 - Math.sin(G.now * 12) * 0.9 : sw * 0.7;
+    const sw = Math.sin(this.walkPh) * clamp(this.curSpeed / 4.5, 0, 1) * 0.75, k = Math.min(1, dt * 12);
+    let aLx = -sw * 0.7, aRx = this.state === 'work' ? -1.2 - Math.sin(G.now * 12) * 0.9 : sw * 0.7, az = 0, lx = 0, iY = 0;
+    if (this.scared && this.state !== 'work') { aLx = aRx = -2.7 + Math.sin(G.now * 20) * 0.06; az = 0.45; if (this.curSpeed < 0.5) { lx = -0.9; iY = -0.28; } }
+    m.legL.rotation.x = lerp(m.legL.rotation.x, sw + lx, Math.min(1, dt * 18)); m.legR.rotation.x = lerp(m.legR.rotation.x, -sw + lx, Math.min(1, dt * 18));
+    m.armL.rotation.x = lerp(m.armL.rotation.x, aLx, Math.min(1, dt * 16)); m.armR.rotation.x = this.state === 'work' ? aRx : lerp(m.armR.rotation.x, aRx, Math.min(1, dt * 16));
+    m.armL.rotation.z = lerp(m.armL.rotation.z, az, k); m.armR.rotation.z = lerp(m.armR.rotation.z, -az, k);
+    m.inner.position.y = lerp(m.inner.position.y, iY * 0.92, k);
   }
 }
 

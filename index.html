@@ -55,18 +55,23 @@
   <div class="tb" data-act="jump" id="t-jump" data-icon="jump" data-label="跳躍"></div>
   <div class="tb" data-act="reload" id="t-r" data-icon="reload" data-label="換彈"></div>
   <div id="t-quick">
-    <div class="tb sm" data-act="eat" data-icon="food" title="進食"><b id="q-food"></b></div>
-    <div class="tb sm" data-act="drink" data-icon="water" title="喝水"><b id="q-water"></b></div>
-    <div class="tb sm" data-act="heal" data-icon="medicine" title="金瘡藥"><b id="q-med"></b></div>
-    <div class="tb sm" data-act="throw"><span id="q-throw-i"></span><b id="q-gren"></b></div>
+    <div class="tb sm" id="tq-eat" data-act="eat" data-icon="food" title="進食"><b id="q-food"></b></div>
+    <div class="tb sm" id="tq-drink" data-act="drink" data-icon="water" title="喝水"><b id="q-water"></b></div>
+    <div class="tb sm" id="tq-heal" data-act="heal" data-icon="medicine" title="金瘡藥"><b id="q-med"></b></div>
+    <div class="tb sm" id="tq-throw" data-act="throw"><span id="q-throw-i"></span><b id="q-gren"></b></div>
     <div class="tb sm hidden" data-act="cyclethrow" id="q-cycle" data-icon="cycle" title="切換投擲物"></div>
-    <div class="tb sm" data-act="whistle" data-icon="horse" title="喚馬"></div>
-    <div class="tb sm" data-act="command" data-icon="flag" title="隊伍指令"><b id="q-cmd">跟</b></div>
+    <div class="tb sm" id="tq-whistle" data-act="whistle" data-icon="horse" title="喚馬"></div>
+    <div class="tb sm" id="tq-cmd" data-act="command" data-icon="flag" title="隊伍指令"><b id="q-cmd">跟</b></div>
   </div>
   <div class="tb sm" data-act="menu" id="t-m" data-icon="bag" title="背包"></div>
   <div class="tb sm" data-act="pause" id="t-p" data-icon="pause" title="暫停"></div>
 </div>
 
+<div id="layout-bar" class="hidden">
+  <div class="lb-tip">拖曳按鍵移動・雙指捏合或拉桿調整大小（<span id="lb-orient"></span>）</div>
+  <div class="lb-row"><b id="lb-name">先點選一個按鍵</b><button data-lb="minus">－</button><input id="lb-size" type="range" min="0.5" max="2" step="0.05" value="1"><button data-lb="plus">＋</button><span id="lb-pct"></span></div>
+  <div class="lb-row wrap"><button data-lb="joy" id="lb-joy"></button><button data-lb="resetone">恢復此鍵</button><button data-lb="resetall">全部恢復</button><button data-lb="move" title="移動工具列">⇅</button><button data-lb="cancel">取消</button><button data-lb="done" class="lb-done">完成</button></div>
+</div>
 <div id="fade"></div>
 <div id="intro" class="hidden">
   <div id="intro-flash"></div><div id="intro-bp"></div>
@@ -109,7 +114,8 @@
         ・出現<strong>金框提示</strong>時點它即可互動（採集、交談、上下馬）<br>
         ・⚑ 切換隊伍指令（跟隨／堅守／自由攻擊）<br>
         ・投擲鍵丟出震天雷／燃燒彈／地雷，↻ 切換種類<br>
-        ・🎒 開啟製作／背包；點右上<strong>小地圖</strong>放大成大地圖；點左上任務可展開說明</p></div>
+        ・🎒 開啟製作／背包；點右上<strong>小地圖</strong>放大成大地圖；點左上任務可展開說明<br>
+        ・⚙️ 設定 →「<strong>按鍵配置</strong>」可自由拖曳、縮放每一顆按鍵</p></div>
       <div><h3>求生要訣</h3>
         <p>・先打開身旁的<strong>軍火箱</strong>，再往東南找<strong>劉備軍營</strong><br>
         ・採集<strong>硝石、硫磺、木炭</strong>調配黑火藥<br>

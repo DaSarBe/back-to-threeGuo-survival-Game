@@ -55,7 +55,7 @@ export const ui = {
     for (const m of MENUS) $('menu-' + m).classList.add('hidden');
     G.menu = null; G.lockPointer && G.lockPointer(); document.body.classList.remove('menu-open');
   },
-  escape() { if (G.menu === 'settings') this.closeSettings(); else if (['pause', 'inv', 'shop', 'dialog', 'win', 'workshop', 'map'].includes(G.menu)) this.close(); },
+  escape() { if (G.menu === 'layout') G.cancelLayout(); else if (G.menu === 'settings') this.closeSettings(); else if (['pause', 'inv', 'shop', 'dialog', 'win', 'workshop', 'map'].includes(G.menu)) this.close(); },
   openMap() { openMap(); },
   // ---------- 設定 ----------
   openSettings() { this.settingsFrom = G.menu || 'pause'; this.open('settings'); this.renderSettings(); },
@@ -81,7 +81,14 @@ export const ui = {
     box.appendChild(q);
     slider('sfx', '音效音量', 0, 1, 0.05, pct);
     slider('music', '配樂音量', 0, 1, 0.05, pct);
-    if (G.touch) slider('btn', '按鍵大小', 0.8, 1.3, 0.05, pct);
+    if (G.touch) {
+      slider('btn', '按鍵大小', 0.8, 1.3, 0.05, pct);
+      const lr = document.createElement('div'); lr.className = 'set-row';
+      const L = S.layout || {}, tag = [L.land && '橫向', L.port && '直向'].filter(Boolean).join('、');
+      lr.innerHTML = `<label>按鍵配置</label><button class="set-wide">自訂每顆按鍵的位置與大小</button><span>${tag ? '已自訂' + tag : '預設'}</span>`;
+      lr.querySelector('button').onclick = () => G.openLayoutEditor(() => { this.open('settings'); this.renderSettings(); });
+      box.appendChild(lr);
+    }
     const hint = document.createElement('p'); hint.className = 'dim';
     hint.textContent = '畫質「自動」：電腦預設高、手機預設中。低畫質關閉陰影並縮短可視距離，最省電。';
     box.appendChild(hint);

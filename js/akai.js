@@ -6,6 +6,7 @@ import { world, heightAt, WATER, SITES } from './world.js';
 import { audio } from './audio.js';
 import { ITEMS } from './data.js';
 import { lerp, clamp, rnd, pick, turnTo, makeLabel } from './util.js';
+import { say } from './barks.js';
 
 const PI = Math.PI;
 // ---------- 羈絆 ----------
@@ -45,6 +46,11 @@ export function addBond(n, why = '') {
 }
 
 // ---------- 阿凱本人 ----------
+const AK_LINES = {
+  idle: ['這裡的空氣好乾淨，沒有 PM2.5。', '我在算傳送門的共振頻率……', '要是有手機訊號就好了。', '這個時代的人力氣好大。', '你的槍保養得真好。'],
+  night: ['這個時代的星空好美……', '不知道研究所的人有沒有在找我。'],
+  fight: ['我、我先躲一下！', '小心！我幫你盯著！', '別管我，我不會被打到！'],
+};
 let A = null, bars = new Map();
 const LOOK = { skin: 0xe8bc94, cloth: 0xe8e8ee, pants: 0x2a3550, hat: 'short', glasses: true };
 class Akai {
@@ -56,7 +62,7 @@ class Akai {
     m.root.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.transparent = true; this.mats.push(o.material); } });
     const l = this.label = makeLabel('阿凱', '#7ae0ff'); l.material.sizeAttenuation = false; l.scale.set(0.26, 0.065, 1); l.position.y = 2.1; m.root.add(l);
     m.root.position.copy(this.pos); G.scene.add(m.root);
-    this.lostT = 0; this.shout = 0;
+    this.lostT = 0; this.shout = 0; this.bubbleY = 2.5; this.chatT = rnd(30, 50); this.wasDanger = false;
   }
   get radius() { return 0.38; }
   setOpacity(v) { if (Math.abs(v - this.op) < 0.005) return; this.op = v; for (const mt of this.mats) mt.opacity = v; this.label.material.opacity = Math.max(0.35, v); }
@@ -92,6 +98,11 @@ class Akai {
     // 戰鬥中半透明躲在一旁
     const danger = !!G.battle || G.actors.some(a => a.alive && a.faction === 'enemy' && a.target && Math.hypot(a.pos.x - P.pos.x, a.pos.z - P.pos.z) < 30);
     this.setOpacity(lerp(this.op, danger ? 0.25 : 1, Math.min(1, dt * 4)));
+    if (ak.joined && dp < 14) { // 頭頂台詞
+      if (danger && !this.wasDanger && G.now > (this.fearCd || 0)) { this.fearCd = G.now + 25; say(this, pick(AK_LINES.fight)); }
+      else if (!danger && !goal && (this.chatT -= dt) <= 0) { this.chatT = rnd(45, 80); say(this, pick(world.isNight && Math.random() < 0.5 ? AK_LINES.night : AK_LINES.idle)); }
+    }
+    this.wasDanger = danger;
     // 一起冒險的時間也會累積羈絆
     if (ak.joined && dp < 30) { this.timeT = (this.timeT || 0) + dt; if (this.timeT > 90) { this.timeT = 0; addBond(1); } }
   }

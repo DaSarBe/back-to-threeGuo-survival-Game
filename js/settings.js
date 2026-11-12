@@ -2,7 +2,7 @@
 import { G } from './state.js';
 
 const KEY = 'sanguo-settings-v1';
-export const DEFAULTS = { sens: 1, touchSens: 1, quality: 'auto', sfx: 0.8, music: 0.6, btn: 1 };
+export const DEFAULTS = { sens: 1, touchSens: 1, quality: 'auto', sfx: 0.8, music: 0.6, btn: 1, layout: null, joyFixed: false }; // layout：自訂按鍵位置與大小（橫向／直向各一份）
 export const S = { ...DEFAULTS };
 try { Object.assign(S, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch (e) { }
 G.settings = S;

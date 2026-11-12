@@ -11,7 +11,7 @@ import { akai, joined, tryRescue, regenMul } from './akai.js';
 
 const PI = Math.PI;
 const keys = {}, mouse = { l: false, r: false };
-const touch = { mx: 0, mz: 0, fire: false, joyId: null, lookId: null, fingers: new Map(), jx: 0, jy: 0, lx: 0, ly: 0 };
+const touch = { mx: 0, mz: 0, fire: false, joyId: null, lookId: null, fingers: new Map(), jx: 0, jy: 0, lx: 0, ly: 0, js: 1 };
 const V = new THREE.Vector3(), D = new THREE.Vector3(), O = new THREE.Vector3(), T = new THREE.Vector3();
 let jumpQ = false, eCd = 0, interact = null, interactT = 0, vmCur = null, flashT = 0, muzzle;
 const vms = {};
@@ -427,6 +427,20 @@ export function initInput(canvas) {
 
   // ---- 觸控 ----
   const joy = document.getElementById('joy'), knob = document.getElementById('joyknob');
+  // 搖桿：預設在左側任意處按下就出現；可在按鍵配置改成固定位置
+  const joyStart = t => {
+    if (G.settings.joyFixed) {
+      const r = joy.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, rad = r.width / 2;
+      if (Math.hypot(t.clientX - cx, t.clientY - cy) > rad * 1.5) return false;
+      touch.jx = cx; touch.jy = cy; touch.js = rad / 60;
+    } else {
+      if (t.clientX >= innerWidth * 0.4) return false;
+      touch.jx = t.clientX; touch.jy = t.clientY; touch.js = 1;
+      joy.style.display = 'block'; joy.style.left = t.clientX - 60 + 'px'; joy.style.top = t.clientY - 60 + 'px';
+    }
+    touch.joyId = t.identifier; knob.style.transform = '';
+    return true;
+  };
   const tstart = e => {
     if (G.menu === 'cutscene') { G.skipCutscene(); e.preventDefault(); return; }
     if (G.menu === 'intro') { G.skipIntro(); e.preventDefault(); return; }
@@ -444,19 +458,17 @@ export function initInput(canvas) {
         else act(a);
         continue;
       }
-      if (t.clientX < innerWidth * 0.4 && touch.joyId === null) {
-        touch.joyId = t.identifier; touch.jx = t.clientX; touch.jy = t.clientY;
-        joy.style.display = 'block'; joy.style.left = t.clientX - 60 + 'px'; joy.style.top = t.clientY - 60 + 'px'; knob.style.transform = '';
-      } else if (touch.lookId === null) { touch.lookId = t.identifier; touch.lx = t.clientX; touch.ly = t.clientY; }
+      if (touch.joyId === null && joyStart(t)) continue;
+      if (touch.lookId === null) { touch.lookId = t.identifier; touch.lx = t.clientX; touch.ly = t.clientY; }
     }
     e.preventDefault();
   };
   const tmove = e => {
     for (const t of e.changedTouches) {
       if (t.identifier === touch.joyId) {
-        let dx = t.clientX - touch.jx, dy = t.clientY - touch.jy; const d = Math.hypot(dx, dy), m = 55;
+        let dx = t.clientX - touch.jx, dy = t.clientY - touch.jy; const d = Math.hypot(dx, dy), m = 55 * touch.js;
         if (d > m) { dx *= m / d; dy *= m / d; }
-        touch.mx = dx / m; touch.mz = -dy / m; knob.style.transform = `translate(${dx}px,${dy}px)`;
+        touch.mx = dx / m; touch.mz = -dy / m; knob.style.transform = `translate(${dx / touch.js}px,${dy / touch.js}px)`;
       } else if (t.identifier === touch.lookId) {
         look(t.clientX - touch.lx, t.clientY - touch.ly, 0.0055 * (G.settings.touchSens || 1) * lerp(1, 0.4, P.aim));
         touch.lx = t.clientX; touch.ly = t.clientY;
@@ -470,7 +482,7 @@ export function initInput(canvas) {
   };
   const tend = e => {
     for (const t of e.changedTouches) {
-      if (t.identifier === touch.joyId) { touch.joyId = null; touch.mx = touch.mz = 0; joy.style.display = 'none'; }
+      if (t.identifier === touch.joyId) { touch.joyId = null; touch.mx = touch.mz = 0; knob.style.transform = ''; if (!G.settings.joyFixed) joy.style.display = 'none'; }
       if (t.identifier === touch.lookId) touch.lookId = null;
       const f = touch.fingers.get(t.identifier);
       if (f) { touch.fingers.delete(t.identifier); if (![...touch.fingers.values()].some(o => o.el === f.el)) f.el.classList.remove('on'); touch.fire = touch.fingers.size > 0; }
@@ -508,5 +520,6 @@ export function resetInput() {
   for (const k in keys) keys[k] = false; mouse.l = mouse.r = false; touch.fire = false; touch.mx = touch.mz = 0;
   touch.joyId = touch.lookId = null; touch.fingers.clear();
   document.querySelectorAll('[data-act="fire"].on').forEach(e => e.classList.remove('on'));
-  const j = document.getElementById('joy'), a = document.getElementById('t-aim'); if (j) j.style.display = 'none'; if (a) a.classList.remove('on');
+  const j = document.getElementById('joy'), a = document.getElementById('t-aim'); if (j && !G.settings.joyFixed) j.style.display = 'none'; if (a) a.classList.remove('on');
+  const k = document.getElementById('joyknob'); if (k) k.style.transform = '';
 }
