@@ -10,7 +10,7 @@ export const ITEMS = [
   ['t-m', '背包'], ['t-p', '暫停'], ['hotbar', '兵器列'], ['ammo', '彈藥資訊'], ['prompt', '互動提示'], ['minimap', '小地圖'], ['joy', '移動搖桿'],
 ];
 const NAME = Object.fromEntries(ITEMS);
-const JOY_DEF = { land: { x: 0.2, y: 0.75, s: 1 }, port: { x: 0.38, y: 0.72, s: 1 } };
+const JOY_DEF = { land: { x: 0.24, y: 0.6, s: 1 }, port: { x: 0.38, y: 0.72, s: 1 } }; // 固定搖桿的預設位置：避開左開火鍵與快捷列
 export const orient = () => innerWidth > innerHeight ? 'land' : 'port';
 const layoutFor = o => (S.layout && S.layout[o]) || null;
 

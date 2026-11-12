@@ -64,6 +64,18 @@ export const ui = {
   },
   escape() { if (G.menu === 'layout') G.cancelLayout(); else if (G.menu === 'settings') this.closeSettings(); else if (['pause', 'inv', 'shop', 'dialog', 'win', 'workshop', 'map'].includes(G.menu)) this.close(); },
   openMap() { openMap(); },
+  // 直向：快捷鍵太多時先縮小、縮窄間距讓它們排成一排；真的排不下才換行，並把右側按鍵往上讓
+  fitQuick() {
+    if (!G.touch) return;
+    const b = document.body, q = $('t-quick');
+    if (innerWidth > innerHeight || b.classList.contains('custom-layout')) { b.style.removeProperty('--cb'); q.style.removeProperty('--qs'); q.style.gap = ''; return; }
+    const n = [...q.children].filter(e => !e.classList.contains('hidden')).length || 1, bs = S.btn || 1, avail = innerWidth - 16, want = 42 * bs;
+    let size = want, gap = 8 * bs;
+    if (n * want + (n - 1) * gap > avail) { gap = 4; size = Math.max(36, Math.min(want, Math.floor((avail - (n - 1) * gap) / n))); }
+    q.style.setProperty('--qs', size + 'px'); q.style.gap = gap + 'px';
+    const h = q.offsetHeight;
+    if (h) b.style.setProperty('--cb', Math.max(104, h + 62) + 'px');
+  },
   // 開始畫面：新遊戲的難度
   renderDiff() {
     const seg = $('diff-seg'); seg.innerHTML = '';
@@ -282,6 +294,7 @@ export const ui = {
         if (P.count(P.thrown) <= 0) { const o = P.ownedThrowables(); if (o.length) P.thrown = o[0]; }
         $('q-throw-i').innerHTML = icon(P.thrown); $('q-gren').textContent = P.count(P.thrown);
         $('q-cycle').classList.toggle('hidden', P.ownedThrowables().length < 2);
+        this.fitQuick();
       }
       el.quick.innerHTML = `${icon('grenade')} ${P.count('grenade')} <kbd>G</kbd>　${icon('firebomb')} ${P.count('firebomb')} <kbd>T</kbd>　${icon('mine')} ${P.count('mine')} <kbd>B</kbd><br>${icon('food')} ${food} <kbd>F</kbd>　${icon('water')} ${P.canteen}/3 <kbd>Z</kbd>　${icon('medicine')} ${P.count('medicine')} <kbd>H</kbd><br><span class="coin">${icon('coin')} ${P.count('coin')}</span>`;
     }
@@ -345,7 +358,7 @@ export const ui = {
     if (last.fol !== key) { last.fol = key; el.followers.innerHTML = key; }
     if (G.touch) { // 名將絕技鍵：有名將同行才出現，角標顯示可用數或冷卻秒數
       const ss = skillStatus(), b = $('tq-skill'), k2 = ss ? (ss.ready ? 'r' + ss.ready : 'c' + ss.wait) : '';
-      if (last.sk !== k2 && G.menu !== 'layout') { last.sk = k2; b.classList.toggle('hidden', !ss); b.classList.toggle('cd', !!ss && !ss.ready); $('q-skill').textContent = ss ? (ss.ready ? '★' : ss.wait) : ''; }
+      if (last.sk !== k2 && G.menu !== 'layout') { last.sk = k2; b.classList.toggle('hidden', !ss); b.classList.toggle('cd', !!ss && !ss.ready); $('q-skill').textContent = ss ? (ss.ready ? '★' : ss.wait) : ''; this.fitQuick(); }
     }
   },
   drawMini() {

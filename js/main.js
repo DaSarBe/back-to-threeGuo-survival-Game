@@ -432,7 +432,7 @@ G.skipCutscene = () => endCutscene();
 G.applySettings = (key = 'all') => {
   const all = key === 'all';
   if (all || key === 'sfx' || key === 'music') audio.setVolumes(S.sfx, S.music);
-  if (all || key === 'btn') document.body.style.setProperty('--bs', S.btn);
+  if (all || key === 'btn') { document.body.style.setProperty('--bs', S.btn); ui.dirty = true; }
   if (all || key === 'layout') applyLayout();
   if (all || key === 'quality') {
     const q = quality();
