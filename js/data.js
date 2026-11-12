@@ -8,7 +8,7 @@ export const ITEMS = {
   sulfur: { n: '硫磺', i: '🟡' },
   charcoal: { n: '木炭', i: '⚫' },
   powder: { n: '黑火藥', i: '💥' },
-  wetPowder: { n: '受潮火藥', i: '🌫️' },
+  wetPowder: { n: '受潮火藥', i: '🧯' },
   oilcloth: { n: '油布包', i: '👝', key: true },
   baojia: { n: '河北寶甲', i: '🥋', key: true, armor: 0.55 },
   parts: { n: '現代零件', i: '⚙️' },
@@ -44,26 +44,30 @@ export const WEAPONS = {
   qinggang: { n: '青釭劍', i: '💠', type: 'melee', dmg: 115, reach: 2.8, rate: 0.42 },
   yitian: { n: '倚天劍', i: '⚜️', type: 'melee', dmg: 125, reach: 2.8, rate: 0.45 },
   tbow: { n: '鐵胎弓', i: '🎯', type: 'bow', dmg: 110, rate: 0.7, ammo: 'arrow' },
-  // ---- 阿凱設計的連發槍（羈絆 Lv5 解鎖） ----
-  smg: { n: '凱式連發槍', i: '⚙️', type: 'gun', dmg: 24, mag: 30, rate: 0.09, reload: 2.0, spread: 0.022, range: 140, ammo: 'rifleAmmo', kick: 0.02, fov: 58 },
+  // ---- 阿凱的特製步槍（羈絆 Lv5 解鎖）：現代彈匣、備彈無限，精準但威力小、射速慢 ----
+  smg: { n: '凱式特製步槍', i: '⚙️', type: 'gun', dmg: 20, mag: 24, rate: 0.36, reload: 1.9, spread: 0.0035, range: 260, ammo: null, kick: 0.025, fov: 40 },
 };
 
+// 製作頁的分類
+export const CRAFT_CATS = [
+  { id: 'all', n: '全部' }, { id: 'ammo', n: '彈藥' }, { id: 'weapon', n: '火器' }, { id: 'throw', n: '投擲・爆破' }, { id: 'survival', n: '求生・醫療' }, { id: 'material', n: '材料加工' },
+];
 export const RECIPES = [
-  { id: 'charcoal', n: '燒製木炭', d: '將木材悶燒成炭', need: { wood: 2 }, give: { charcoal: 2 } },
-  { id: 'powder', n: '調配黑火藥', d: '一硝二磺三木炭', need: { saltpeter: 1, sulfur: 1, charcoal: 1 }, give: { powder: 3 } },
-  { id: 'grenade', n: '震天雷（手榴彈）', d: '按 G 投擲，範圍爆炸', need: { powder: 2, iron: 1 }, give: { grenade: 1 } },
-  { id: 'shotgun', n: '霰彈槍', d: '近距離毀滅性火力', need: { iron: 8, wood: 4, powder: 3 }, weapon: 'shotgun', bonus: { shell: 12 } },
-  { id: 'shell', n: '霰彈 ×6', d: '霰彈槍彈藥', need: { powder: 2, iron: 1 }, give: { shell: 6 } },
-  { id: 'rifle', n: '步槍', d: '附瞄準鏡，一槍斃命', need: { iron: 12, wood: 6, powder: 5 }, weapon: 'rifle', bonus: { rifleAmmo: 10 } },
-  { id: 'rifleAmmo', n: '步槍彈 ×10', d: '步槍彈藥', need: { powder: 2, iron: 2 }, give: { rifleAmmo: 10 } },
-  { id: 'arrow', n: '箭矢 ×6', d: '長弓使用', need: { wood: 1, iron: 1 }, give: { arrow: 6 } },
-  { id: 'drypowder', n: '烘乾火藥', d: '須在營火旁', near: 'fire', need: { wetPowder: 2, wood: 1 }, give: { powder: 2 } },
-  { id: 'oilcloth', n: '油布包', d: '獸油浸布，大幅減緩火藥受潮', once: 'oilcloth', need: { meat: 3, herb: 2 }, give: { oilcloth: 1 } },
-  { id: 'cooked', n: '烤肉', d: '熟食更能充飢', need: { meat: 1, wood: 1 }, give: { cooked: 1 } },
-  { id: 'smg', n: '凱式連發槍', d: '阿凱設計的連發火器，按住扳機連射', req: 'akai5', need: { parts: 3, iron: 10, powder: 6 }, weapon: 'smg', bonus: { rifleAmmo: 30 } },
-  { id: 'firebomb', n: '燃燒彈 ×2', d: '獸油火罐，落地起火燒一片（雨天燒得短）', need: { powder: 1, meat: 1, wood: 1 }, give: { firebomb: 2 } },
-  { id: 'mine', n: '地雷', d: '埋在地上，敵人踩到就爆炸', need: { powder: 2, iron: 2 }, give: { mine: 1 } },
-  { id: 'medicine', n: '金瘡藥', d: '按 H 使用，恢復生命', need: { herb: 2 }, give: { medicine: 1 } },
+  { id: 'charcoal', cat: 'material', n: '燒製木炭', d: '將木材悶燒成炭', need: { wood: 2 }, give: { charcoal: 2 } },
+  { id: 'powder', cat: 'material', n: '調配黑火藥', d: '一硝二磺三木炭', need: { saltpeter: 1, sulfur: 1, charcoal: 1 }, give: { powder: 3 } },
+  { id: 'grenade', cat: 'throw', n: '震天雷（手榴彈）', d: '按 G 投擲，範圍爆炸', need: { powder: 2, iron: 1 }, give: { grenade: 1 } },
+  { id: 'shotgun', cat: 'weapon', n: '霰彈槍', d: '近距離毀滅性火力', need: { iron: 8, wood: 4, powder: 3 }, weapon: 'shotgun', bonus: { shell: 12 } },
+  { id: 'shell', cat: 'ammo', n: '霰彈 ×6', d: '霰彈槍彈藥', need: { powder: 2, iron: 1 }, give: { shell: 6 } },
+  { id: 'rifle', cat: 'weapon', n: '步槍', d: '附瞄準鏡，一槍斃命', need: { iron: 12, wood: 6, powder: 5 }, weapon: 'rifle', bonus: { rifleAmmo: 10 } },
+  { id: 'rifleAmmo', cat: 'ammo', n: '步槍彈 ×10', d: '步槍彈藥', need: { powder: 2, iron: 2 }, give: { rifleAmmo: 10 } },
+  { id: 'arrow', cat: 'ammo', n: '箭矢 ×6', d: '長弓使用', need: { wood: 1, iron: 1 }, give: { arrow: 6 } },
+  { id: 'drypowder', cat: 'material', n: '烘乾火藥', d: '須在營火旁', near: 'fire', need: { wetPowder: 2, wood: 1 }, give: { powder: 2 } },
+  { id: 'oilcloth', cat: 'survival', n: '油布包', d: '獸油浸布，大幅減緩火藥受潮', once: 'oilcloth', need: { meat: 3, herb: 2 }, give: { oilcloth: 1 } },
+  { id: 'cooked', cat: 'survival', n: '烤肉', d: '熟食更能充飢', need: { meat: 1, wood: 1 }, give: { cooked: 1 } },
+  { id: 'smg', cat: 'weapon', n: '凱式特製步槍', d: '阿凱的特製步槍：備彈無限、不怕受潮、精準適合遠距點射，但威力小、射速慢', req: 'akai5', need: { parts: 3, iron: 10, powder: 6 }, weapon: 'smg' },
+  { id: 'firebomb', cat: 'throw', n: '燃燒彈 ×2', d: '獸油火罐，落地起火燒一片（雨天燒得短）', need: { powder: 1, meat: 1, wood: 1 }, give: { firebomb: 2 } },
+  { id: 'mine', cat: 'throw', n: '地雷', d: '埋在地上，敵人踩到就爆炸', need: { powder: 2, iron: 2 }, give: { mine: 1 } },
+  { id: 'medicine', cat: 'survival', n: '金瘡藥', d: '按 H 使用，恢復生命', need: { herb: 2 }, give: { medicine: 1 } },
 ];
 
 export const SHOP_BUY = [

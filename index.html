@@ -38,11 +38,11 @@
   <div id="prompt" class="hidden" data-act="interact"></div>
 
   <div id="stats">
-    <div class="stat st-hp"><span data-icon="heart"></span><div class="bar"><div id="b-hp" class="fill hp"></div></div></div>
-    <div class="stat st-food"><span data-icon="food"></span><div class="bar"><div id="b-hunger" class="fill hunger"></div></div></div>
-    <div class="stat st-water"><span data-icon="drop"></span><div class="bar"><div id="b-thirst" class="fill thirst"></div></div></div>
-    <div class="stat st-sta"><span data-icon="bolt"></span><div class="bar"><div id="b-stamina" class="fill stamina"></div></div></div>
-    <div class="stat hidden" id="st-damp" title="火藥受潮"><span data-icon="damp"></span><div class="bar"><div id="b-damp" class="fill damp"></div></div></div>
+    <div class="stat st-hp"><span data-icon="heart"></span><div class="bar"><div id="b-hp" class="fill hp"></div></div><em id="v-hp"></em></div>
+    <div class="stat st-food"><span data-icon="food"></span><div class="bar"><div id="b-hunger" class="fill hunger"></div></div><em id="v-hunger"></em></div>
+    <div class="stat st-water"><span data-icon="drop"></span><div class="bar"><div id="b-thirst" class="fill thirst"></div></div><em id="v-thirst"></em></div>
+    <div class="stat st-sta"><span data-icon="bolt"></span><div class="bar"><div id="b-stamina" class="fill stamina"></div></div><em id="v-stamina"></em></div>
+    <div class="stat hidden" id="st-damp" title="火藥受潮"><span data-icon="damp"></span><div class="bar"><div id="b-damp" class="fill damp"></div></div><em id="v-damp"></em></div>
   </div>
   <div id="hotbar"></div>
   <div id="ammo"><div id="ammo-n"></div><div id="ammo-w"></div><div id="quick"></div></div>
@@ -67,6 +67,7 @@
   </div>
   <div class="tb sm" data-act="menu" id="t-m" data-icon="bag" title="背包"></div>
   <div class="tb sm" data-act="pause" id="t-p" data-icon="pause" title="暫停"></div>
+  <div class="tb sm" data-act="flashlight" id="t-light" data-icon="flashlight" title="戰術手電筒"></div>
 </div>
 
 <div id="layout-bar" class="hidden">
@@ -105,6 +106,7 @@
         <kbd>數字鍵</kbd>／<kbd>滾輪</kbd> 切換兵器　<kbd>G</kbd> 震天雷<br>
         <kbd>E</kbd> 互動／採集／上下馬　<kbd>X</kbd> 吹哨喚馬<br>
         <kbd>V</kbd> 隊伍指令（跟隨／堅守／自由攻擊）　<kbd>Q</kbd> 名將絕技<br>
+        <kbd>L</kbd> 戰術手電筒（夜裡照路，但敵人更容易發現你）<br>
         <kbd>F</kbd> 進食　<kbd>Z</kbd> 喝水　<kbd>H</kbd> 金瘡藥<br>
         <kbd>T</kbd> 燃燒彈　<kbd>B</kbd> 埋地雷　<kbd>1–0</kbd> 依序切換兵器<br>
         <kbd>Tab</kbd> 背包／製作／訂單　<kbd>M</kbd> 大地圖　<kbd>Esc</kbd> 暫停</p></div>
@@ -116,6 +118,7 @@
         ・出現<strong>金框提示</strong>時點它即可互動（採集、交談、上下馬）<br>
         ・⚑ 切換隊伍指令（跟隨／堅守／自由攻擊）；名將同行時會出現<strong>絕技</strong>鍵<br>
         ・投擲鍵丟出震天雷／燃燒彈／地雷，↻ 切換種類<br>
+        ・右上的手電筒鍵開關<strong>戰術手電筒</strong>（夜裡照路，但敵人更容易發現你）<br>
         ・🎒 開啟製作／背包；點右上<strong>小地圖</strong>放大成大地圖；點左上任務可展開說明<br>
         ・⚙️ 設定 →「<strong>按鍵配置</strong>」可自由拖曳、縮放每一顆按鍵</p></div>
       <div><h3>求生要訣</h3>
@@ -160,7 +163,7 @@
 </div>
 
 <div id="menu-dialog" class="menu hidden low">
-  <div class="panel dialog"><div id="dlg-name"></div><div id="dlg-title"></div><p id="dlg-text"></p><div id="dlg-opts" class="btns col"></div></div>
+  <div class="panel dialog"><div class="dlg-h"><div id="dlg-name"></div><div id="dlg-title"></div></div><p id="dlg-text"></p><div id="dlg-opts" class="btns col"></div></div>
 </div>
 
 <div id="menu-shop" class="menu hidden">

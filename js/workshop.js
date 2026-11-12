@@ -6,6 +6,7 @@ import { audio } from './audio.js';
 import { costText, canPay, pay } from './squad.js';
 import { price } from './orders.js';
 import { hasBond } from './akai.js';
+import { cicon, icon, iconize, iconText } from './icons.js';
 
 export const WS = G.ws = { built: false, lv: { mill: 0, forge: 0, store: 0 }, store: {}, product: 'shell', t: WS_CYCLE, made: {}, msgT: -999, idleT: -999 };
 export function loadWorkshop(o) {
@@ -126,18 +127,18 @@ export function initWorkshopUI() {
   document.querySelectorAll('[data-wtab]').forEach(b => b.onclick = () => { tab = b.dataset.wtab; note = ''; render(); });
 }
 function btn(label, ok, fn) {
-  const b = document.createElement('button'); b.textContent = label; b.disabled = !ok;
+  const b = document.createElement('button'); b.innerHTML = iconText(label); b.disabled = !ok;
   b.onclick = () => { const r = fn(); note = r || ''; render(); }; return b;
 }
-function row(html, ...buttons) { const r = document.createElement('div'); r.className = 'row'; r.innerHTML = `<div class="nm">${html}</div>`; buttons.forEach(b => r.appendChild(b)); return r; }
+function row(html, ...buttons) { const r = document.createElement('div'); r.className = 'row'; r.innerHTML = `<div class="nm">${iconize(html)}</div>`; buttons.forEach(b => r.appendChild(b)); return r; }
 const need = c => Object.entries(c).map(([k, n]) => { const have = G.player.count(k); return `<span class="${have < n ? 'lack' : ''}">${k === 'coin' ? '🪙' : ITEMS[k].i}${k === 'coin' ? '' : ITEMS[k].n} ${n}</span>`; }).join('　');
 
 export function render() {
   if (G.menu !== 'workshop') return;
   document.querySelectorAll('[data-wtab]').forEach(b => { b.classList.toggle('on', b.dataset.wtab === tab); b.disabled = !WS.built && b.dataset.wtab !== 'build'; });
-  $('ws-status').textContent = WS.built ? `倉庫 ${stored()}/${cap()}　🪙${G.player.count('coin')}` + ((WS.lv.mill || WS.lv.forge) ? `　下一輪 ${Math.ceil(WS.t)} 秒` : '') : `🪙${G.player.count('coin')}`;
+  $('ws-status').innerHTML = iconize(WS.built ? `倉庫 ${stored()}/${cap()}　🪙${G.player.count('coin')}` + ((WS.lv.mill || WS.lv.forge) ? `　下一輪 ${Math.ceil(WS.t)} 秒` : '') : `🪙${G.player.count('coin')}`);
   const box = $('ws-body'); box.innerHTML = '';
-  if (note) { const p = document.createElement('p'); p.className = 'ws-note'; p.textContent = note; box.appendChild(p); }
+  if (note) { const p = document.createElement('p'); p.className = 'ws-note'; p.innerHTML = iconText(note); box.appendChild(p); }
   const h = (t) => { const e = document.createElement('h3'); e.textContent = t; box.appendChild(e); };
   if (tab === 'build') {
     if (!available()) { box.insertAdjacentHTML('beforeend', '<p class="dim">這塊空地屬於劉備軍營。先去軍營找劉備談談吧。</p>'); return; }
@@ -171,20 +172,20 @@ export function render() {
     if (!ks.length) box.insertAdjacentHTML('beforeend', '<p class="dim">倉庫是空的。</p>');
     const grid = document.createElement('div'); grid.className = 'grid'; box.appendChild(grid);
     for (const k of ks) {
-      const c = document.createElement('div'); c.className = 'cell'; c.innerHTML = `${ITEMS[k].i} ${ITEMS[k].n}<b>${WS.store[k]}</b>`;
+      const c = document.createElement('div'); c.className = 'cell'; c.innerHTML = `${cicon(k)} ${ITEMS[k].n}<b>${WS.store[k]}</b>`;
       c.appendChild(btn('取出', true, () => { withdraw(k); return ''; })); grid.appendChild(c);
     }
     const own = Object.keys(G.player.inv).filter(k => G.player.count(k) > 0 && k !== 'coin' && !ITEMS[k].key);
     if (own.length) {
       h('從背包存入');
       const g2 = document.createElement('div'); g2.className = 'grid'; box.appendChild(g2);
-      for (const k of own) { const c = document.createElement('div'); c.className = 'cell'; c.innerHTML = `${ITEMS[k].i} ${ITEMS[k].n}<b>${G.player.count(k)}</b>`; c.appendChild(btn('存入', stored() < cap(), () => { depositItem(k, Infinity); return ''; })); g2.appendChild(c); }
+      for (const k of own) { const c = document.createElement('div'); c.className = 'cell'; c.innerHTML = `${cicon(k)} ${ITEMS[k].n}<b>${G.player.count(k)}</b>`; c.appendChild(btn('存入', stored() < cap(), () => { depositItem(k, Infinity); return ''; })); g2.appendChild(c); }
     }
   } else if (tab === 'upg') {
     box.insertAdjacentHTML('beforeend', `<p class="dim">改良上限＝鐵匠爐等級（目前 ${WS.lv.forge} 級，最多改良 2 級）。改良效果永久保留。</p>`);
     for (const gun of GUNS) {
       if (!G.player.owned[gun]) continue;
-      h(`${WEAPONS[gun].i} ${WEAPONS[gun].n}`);
+      h(`${WEAPONS[gun].n}`);
       for (const track of ['mag', 'acc', 'dmg']) {
         const U = UPGRADES[track], lv = upLevel(gun, track), c = lv < 2 ? withDisc(upgradeCost(gun, lv)) : null;
         const eff = track === 'mag' ? `彈匣 ${lv ? U.lv[lv - 1][gun] : WEAPONS[gun].mag}${c ? ' → ' + U.lv[lv][gun] : ''}` : track === 'acc' ? `散布 ×${lv ? U.mult[lv - 1] : 1}${c ? ' → ×' + U.mult[lv] : ''}` : `傷害 ×${lv ? U.mult[lv - 1] : 1}${c ? ' → ×' + U.mult[lv] : ''}`;

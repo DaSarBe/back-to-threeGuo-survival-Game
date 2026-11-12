@@ -17,7 +17,7 @@ export const BOND = [
   { n: '現代急救', d: '脫離戰鬥後幫你包紮，生命回復加快 2.5 倍' },
   { n: '防潮塗層', d: '火藥受潮速度減半，自製彈藥啞火率降低 40%' },
   { n: '緊急救援', d: '每天一次，你快倒下時把你拉回來，保留 30 點生命' },
-  { n: '科技改良', d: '製作少用 20% 材料、工坊每批有兩成機率不耗原料；解鎖「凱式連發槍」' },
+  { n: '科技改良', d: '製作少用 20% 材料、工坊每批有兩成機率不耗原料；解鎖「凱式特製步槍」' },
 ];
 export const AK = () => G.flags.akai || (G.flags.akai = { arrived: false, joined: false, xp: 0, chatDay: 0, giftDay: 0, gifts: 0, rescueDay: 0, wait: false });
 export const joined = () => !!(G.flags.akai && G.flags.akai.joined);
@@ -41,7 +41,7 @@ export function addBond(n, why = '') {
   if (why) G.ui.msg(`🤝 與阿凱的羈絆 +${n}（${why}）`, 'get');
   if (after > before) {
     G.ui.msg(`🤝 與阿凱的羈絆提升到 Lv${after}：${BOND[after].n}——${BOND[after].d}`, 'quest'); audio.play('quest', 0.7);
-    if (after >= 5 && !AK().gaveParts) { AK().gaveParts = true; G.player.give('parts', 3, true); G.ui.msg('阿凱：「我畫好連發槍的圖紙了，零件先給你，去製作頁看看！」', 'say'); }
+    if (after >= 5 && !AK().gaveParts) { AK().gaveParts = true; G.player.give('parts', 3, true); G.ui.msg('阿凱：「我畫好特製步槍的圖紙了，零件先給你，去製作頁看看！」', 'say'); }
   }
 }
 

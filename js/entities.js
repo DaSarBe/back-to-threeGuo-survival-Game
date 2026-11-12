@@ -9,6 +9,8 @@ import { damageTargets } from './world.js';
 import { raining } from './weather.js';
 import { bark, idleChatter, say } from './barks.js';
 import { diff } from './difficulty.js';
+import { makeTorch, addEmitter, nightK } from './lights.js';
+const TV = new THREE.Vector3();
 // 友軍攻擊加成（劉備的「仁德激勵」）
 const allyBuff = a => a.faction === 'ally' && G.now < (G.allyBuffT || 0) ? 1.35 : 1;
 
@@ -56,7 +58,7 @@ export class Actor {
   get radius() { return (this.horse ? 0.9 : 0.42) * this.scale; }
   // 播放一個動作（閒置小動作、抱拳、吶喊、歡呼…）
   emote(k, dur) {
-    const D = { look: 3.2, stretch: 2.2, scratch: 2, yawn: 2.4, beard: 3, flourish: 1.8, sharpen: 4, sit: rnd(9, 16), salute: 1.6, chat: 2.6, warcry: 0.8, cheer: 1.4 };
+    const D = { look: 3.2, stretch: 2.2, scratch: 2, yawn: 2.4, beard: 3, flourish: 1.8, sharpen: 4, sit: rnd(9, 16), salute: 1.6, chat: 2.6, warcry: 0.8, cheer: 1.4, torch: 1.3 };
     this.emo = { k, t: 0, dur: dur || D[k] || 2 };
   }
   idleEmote() {
@@ -72,6 +74,32 @@ export class Actor {
     }
     if (this.horse) pool = pool.filter(k => k !== 'sit');
     this.emote(pick(pool));
+  }
+  // ---- 火把：小兵天黑後點起火把，天亮熄掉（各自隔幾秒，不會整齊劃一） ----
+  get canTorch() { const d = this.def; return !d.general && !d.boss && !d.ranged && !d.gun && !d.weapon2 && !d.noncombat && !d.talk; }
+  updateTorch(dt) {
+    const want = nightK() > 0.55 && this.alive;
+    if (want !== !!this.torchLit) {
+      if (this.torchT == null) this.torchT = this.torch ? rnd(0.5, 6) : rnd(0.2, 4);
+      if ((this.torchT -= dt) <= 0) { this.torchT = null; this.setTorch(want); }
+    } else this.torchT = null;
+    if (this.torchLit && this.m.root.visible) {
+      const u = this.torch.userData, t = G.now;
+      u.flame.scale.set(1 + 0.15 * Math.sin(t * 17 + this.ph0), 1 + 0.3 * Math.sin(t * 13 + this.ph0 * 2), 1);
+      u.glow.material.opacity = (0.35 + 0.45 * nightK()) * (0.9 + 0.1 * Math.sin(t * 9 + this.ph0));
+    }
+  }
+  setTorch(on) {
+    if (on && !this.torch) {
+      const tr = this.torch = makeTorch(); tr.position.set(0, -0.62, 0.05); tr.rotation.x = 0.8; this.m.armL.add(tr); // 手臂舉到 -0.8 時火把正好朝上
+      this.torchEm = addEmitter({ base: 30, range: 15, color: 0xff9a40, ph: this.ph0, pos: () => { tr.getWorldPosition(TV); TV.y += 0.75; return TV; }, on: () => this.torchLit && this.alive && this.m.root.visible, gone: () => !this.alive || !!this.gone });
+    }
+    if (!this.torch) return;
+    this.torchLit = on; this.torch.visible = on;
+    if (!this.m.root.visible) return;
+    const hp = V.set(this.pos.x, this.pos.y + 1.8 * this.scale + this.seat, this.pos.z);
+    if (on) { fxBurst(hp, 0xffb040, 6, 1.5, 0.4, 0.08); if (!this.target && this.curSpeed < 0.5 && !this.emo) this.emote('torch'); }
+    else fxBurst(hp, 0x6a6a6a, 6, 1, 0.8, 0.18);
   }
 
   rayHit(o, d) {
@@ -151,6 +179,7 @@ export class Actor {
       return;
     }
     this.alive = false; this.target = null; this.emo = null;
+    if (this.torch) { this.torchLit = false; this.torch.visible = false; }
     this.m.inner.rotation.set(0, 0, 0); this.m.inner.position.set(0, this.seat, 0); // 倒地前恢復站姿
     if (!fled) bark(this, 'die', d.boss ? 0 : 0.35);
     if (src instanceof Actor && src.alive) { src.cheer = 1.3; bark(src, 'kill', 0.5); }
@@ -187,7 +216,7 @@ export class Actor {
   findTarget() {
     const P = G.player; let best = null, bd = 1e9;
     if (this.faction === 'enemy') {
-      const see = this.alert > 0 ? 110 : (world.isNight ? 28 : 40) * (this.def.boss ? 1.3 : 1) * (1 - (G.fogF || 0) * 0.4 - (G.weatherF > 0.6 ? 0.15 : 0)); // 霧和雨會縮短敵人視野
+      const see = this.alert > 0 ? 110 : (world.isNight && !P.flash ? 28 : 40) * (this.def.boss ? 1.3 : 1) * (1 - (G.fogF || 0) * 0.4 - (G.weatherF > 0.6 ? 0.15 : 0)); // 霧和雨會縮短敵人視野
       const B = G.battle && G.battle.mode === 'duel' ? G.battle.boss : null;
       if (B && this !== B && B.arena && d2(this.pos, B.home) < B.arena.R + 15) return null; // 單挑時，敵方士卒在旁觀戰
       if (B === this) return P.alive && this.inArena(P) ? P : null;                          // 單挑時，敵將只對付玩家
@@ -234,6 +263,7 @@ export class Actor {
 
     this.atkT -= dt; this.alert -= dt; this.specialT -= dt;
     if (this.faction === 'ally' && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.012 * dt);
+    if (this.canTorch) this.updateTorch(dt);
     if (this.stunT > 0 || this.skillBusy) { this.special(dt); return; } // 被震懾，或正在施展絕技
 
     // ---- 目標 ----
@@ -435,6 +465,7 @@ export class Actor {
     const sw = Math.sin(this.walkPh) * clamp(this.curSpeed / 4.5, 0, 1) * 0.75, t = G.now;
     // 基本姿勢：走路擺臂
     let aLx = d.weapon2 ? -0.35 - sw * 0.25 : -sw * 0.7, aLz = 0, aRx = -0.35 + sw * 0.25, aRz = 0;
+    if (this.torchLit) { aLx = -0.8 + sw * 0.12; aLz = 0.1; } // 舉著火把
     let lLx = sw, lRx = -sw, lz = 0, iRx = 0, iRy = 0, iY = 0, iZ = 0;
     if (tg && !this.horse) { // 對戰架勢：兵器舉在身前、微蹲、重心起伏
       if (d.gun) { aRx = -1.3; aLx = -1.2; aLz = 0.45; }
@@ -459,6 +490,8 @@ export class Actor {
         case 'salute': aLx = mix(aLx, -1.5); aLz = mix(aLz, 0.6); aRx = mix(aRx, -1.5); aRz = mix(aRz, -0.6); iRx = mix(iRx, 0.14); break; // 抱拳
         case 'chat': aRx = mix(aRx, -0.9 + Math.sin(et * 5) * 0.35); aRz = mix(aRz, -0.25); iRy = mix(iRy, Math.sin(et * 1.3) * 0.15); break;
         case 'warcry': aRx = mix(aRx, -2.8); iRx = mix(iRx, -0.12); break;
+        case 'torch': aLx = mix(aLx, -2.5); aLz = mix(aLz, 0.25); iRy = mix(iRy, 0.2); break; // 點火把：舉高
+
       }
     }
     if (this.cheer > 0) { this.cheer -= dt; if (!tg) { aRx = -2.9 + Math.sin(t * 14) * 0.15; iRx = -0.06; } } // 擊倒對手後舉起兵器
@@ -723,7 +756,11 @@ export class Animal {
     if (this.rider) { sp = this.speed; }
     else if (this.kind === 'horse') {
       if (this.state === 'come') {
-        if (dp < 4.5) this.state = 'idle';
+        if (dp < 4.5) {
+          this.state = 'idle';
+          if (this.autoMount && P.alive && !P.mount && P.horse === this) { P.mountHorse(this); G.ui.msg(`${this.name}奔到你身邊，你翻身上馬。`, 'get'); }
+          this.autoMount = false;
+        }
         else { mx = (P.pos.x - this.pos.x) / dp; mz = (P.pos.z - this.pos.z) / dp; sp = 14; if (dp > 200) this.pos.set(P.pos.x + 30, 0, P.pos.z + 30); }
       } else if (!this.tamed) this.wander(dt, 2.2, 22);
       if (this.dir) { mx = this.dir.x; mz = this.dir.z; sp = this.dir.s; }

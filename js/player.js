@@ -35,10 +35,12 @@ export const player = {
   giveWeapon(id) {
     if (this.owned[id]) return;
     this.owned[id] = true; const k = HOTBAR.filter(w => this.owned[w]).indexOf(id) + 1;
-    G.ui.msg(`獲得兵器：${WEAPONS[id].i} ${WEAPONS[id].n}（${G.touch ? '點下方兵器列' : k <= 10 ? '按 ' + (k % 10) + ' ' : '滾輪'}切換）`, 'quest'); G.ui.dirty = true;
+    if (WEAPONS[id].type === 'gun' && !(this.mags[id] >= 0)) this.mags[id] = this.wstat(id).mag; // 新槍裝滿彈匣（之前特製步槍沒有初始彈匣，會顯示 NaN 而無法射擊）
+    G.ui.msg(`獲得兵器：${WEAPONS[id].n}（${G.touch ? '點下方兵器列' : k <= 10 ? '按 ' + (k % 10) + ' ' : '滾輪'}切換）`, 'quest'); G.ui.dirty = true;
   },
   equip(id) {
     if (!this.owned[id] || this.cur === id) return;
+    if (WEAPONS[id].type === 'gun' && !(this.mags[id] >= 0)) this.mags[id] = 0; // 舊存檔裡沒有彈匣紀錄的槍：從空彈匣開始，會自動換彈
     this.cur = id; this.reloadT = 0; this.fireCd = Math.max(this.fireCd, 0.25); this.swingT = 0; G.ui.dirty = true; audio.play('click');
   },
   cycle(dir) {
@@ -91,7 +93,15 @@ export const player = {
   whistle() {
     const h = this.horse;
     if (!h || this.mount) return G.ui.msg(this.mount ? '你已經在馬上了。' : '你還沒有自己的馬。', 'info');
-    h.state = 'come'; G.ui.msg(`你吹了聲口哨，${h.name}正朝你奔來。`, 'info'); audio.play('neigh', 0.6);
+    h.state = 'come'; h.autoMount = true; audio.play('neigh', 0.6); // 馬跑到身邊就直接上馬
+    G.ui.msg(Math.hypot(h.pos.x - this.pos.x, h.pos.z - this.pos.z) < 4.5 ? `${h.name}就在身旁。` : `你吹了聲口哨，${h.name}正朝你奔來，到了就翻身上馬。`, 'info');
+  },
+  // 戰術手電筒：夜裡照亮前方，但敵人也比較容易發現你
+  toggleFlash() {
+    this.flash = !this.flash; audio.play('click', 0.6);
+    const b = document.getElementById('t-light'); if (b) b.classList.toggle('on', this.flash);
+    G.ui.dirty = true;
+    if (this.flash && !G.flags.flashTold) { G.flags.flashTold = true; G.ui.msg('🔦 戰術手電筒：照亮前方的路。注意——夜裡開著燈，敵人在更遠處就會發現你。', 'info'); }
   },
   // ---- 投擲物：震天雷 / 燃燒彈 / 地雷 ----
   throwItem(kind) {
@@ -122,7 +132,7 @@ export const player = {
     G.ui.msg(`投擲物：${ITEMS[this.thrown].i}${ITEMS[this.thrown].n}（${this.count(this.thrown)}）`, 'info');
   },
   // ---- 武器數值（含工坊改良） ----
-  statsChanged() { this._ws = {}; },
+  statsChanged() { this._ws = {}; for (const id in this.owned) if (WEAPONS[id] && WEAPONS[id].type === 'gun' && !(this.mags[id] >= 0)) this.mags[id] = this.wstat(id).mag; }, // 讀檔時補上缺少的彈匣紀錄
   wstat(id) {
     const b = WEAPONS[id], u = this.upg[id];
     if (b.type !== 'gun' || !u) return b;
@@ -139,7 +149,8 @@ export const player = {
   mountHorse(h) {
     if (!h.tamed) { h.tame(); G.ui.msg(`你馴服了這匹${h.name}！`, 'get'); }
     this.mount = h; this.horse = h; h.rider = true; h.state = 'idle'; h.dir = null;
-    h.speed = 0; audio.play('neigh', 0.7); G.ui.msg(G.touch ? '已上馬：搖桿推到底即奔馳，點「下馬」提示可下馬，🐴 可吹哨喚馬。' : '已上馬：W 前進、Shift 奔馳、E 下馬、X 可吹哨喚馬。', 'info');
+    h.speed = 0; audio.play('neigh', 0.7);
+    if (!G.flags.mountTold) { G.flags.mountTold = true; G.ui.msg(G.touch ? '已上馬：搖桿推到底即奔馳，點「下馬」提示可下馬；喚馬鍵會叫馬過來並直接上馬。' : '已上馬：W 前進、Shift 奔馳、E 下馬；按 X 吹哨，馬跑到身邊就會直接上馬。', 'info'); } // 操作說明只講一次
   },
   dismount() {
     const h = this.mount; if (!h) return;
@@ -421,7 +432,7 @@ export function initInput(canvas) {
     if (e.repeat) return;
     keys[e.code] = true;
     if (e.code.startsWith('Digit')) { const d = +e.code.slice(5), own = HOTBAR.filter(w => P.owned[w]), id = own[(d + 9) % 10]; if (id) P.equip(id); } // 數字鍵依序對應已擁有的兵器
-    else act({ KeyE: 'interact', Space: 'jump', KeyR: 'reload', KeyG: 'grenade', KeyT: 'firebomb', KeyB: 'mine', KeyF: 'eat', KeyH: 'heal', KeyZ: 'drink', KeyX: 'whistle', Tab: 'menu', KeyC: 'menu', KeyI: 'menu', KeyM: 'map', KeyV: 'command', KeyQ: 'skill', Escape: 'pause', KeyP: 'pause' }[e.code]);
+    else act({ KeyE: 'interact', Space: 'jump', KeyR: 'reload', KeyG: 'grenade', KeyT: 'firebomb', KeyB: 'mine', KeyF: 'eat', KeyH: 'heal', KeyZ: 'drink', KeyX: 'whistle', Tab: 'menu', KeyC: 'menu', KeyI: 'menu', KeyM: 'map', KeyV: 'command', KeyQ: 'skill', KeyL: 'flashlight', Escape: 'pause', KeyP: 'pause' }[e.code]);
   });
   document.addEventListener('keyup', e => { keys[e.code] = false; });
   window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.l = mouse.r = false; });
@@ -514,6 +525,7 @@ function act(a) {
     case 'pause': G.ui.open('pause'); break;
     case 'command': G.cycleCommand(); break;
     case 'skill': G.commandSkill(); break;
+    case 'flashlight': P.toggleFlash(); break;
     case 'tutorskip': G.tutorSkip(); break;
     case 'map': G.ui.openMap(); break;
     case 'music': G.ui.msg(audio.toggleMusic() ? '配樂：開' : '配樂：關', 'info'); break;

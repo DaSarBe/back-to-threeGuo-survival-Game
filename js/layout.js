@@ -7,7 +7,7 @@ const $ = id => document.getElementById(id);
 export const ITEMS = [
   ['t-fire', '開火（右）'], ['t-fire2', '開火（左）'], ['t-aim', '瞄準'], ['t-jump', '跳躍'], ['t-r', '換彈'],
   ['tq-eat', '進食'], ['tq-drink', '喝水'], ['tq-heal', '金瘡藥'], ['tq-throw', '投擲'], ['q-cycle', '切換投擲物'], ['tq-whistle', '喚馬'], ['tq-cmd', '隊伍指令'], ['tq-skill', '名將絕技'],
-  ['t-m', '背包'], ['t-p', '暫停'], ['hotbar', '兵器列'], ['ammo', '彈藥資訊'], ['prompt', '互動提示'], ['minimap', '小地圖'], ['joy', '移動搖桿'],
+  ['t-m', '背包'], ['t-p', '暫停'], ['t-light', '手電筒'], ['hotbar', '兵器列'], ['ammo', '彈藥資訊'], ['prompt', '互動提示'], ['minimap', '小地圖'], ['joy', '移動搖桿'],
 ];
 const NAME = Object.fromEntries(ITEMS);
 const JOY_DEF = { land: { x: 0.24, y: 0.6, s: 1 }, port: { x: 0.38, y: 0.72, s: 1 } }; // 固定搖桿的預設位置：避開左開火鍵與快捷列

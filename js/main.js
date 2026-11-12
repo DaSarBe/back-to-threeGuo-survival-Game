@@ -17,6 +17,7 @@ import { playIntro, updateIntro, skipIntro } from './intro.js';
 import { syncOutposts, setDeviceActive, outposts, siteVisible } from './world.js';
 import { spawnAkai, updateAkai, AK, akai, joined, addBond } from './akai.js';
 import { updateBarks } from './barks.js';
+import { initLights, initFlashlight, updateLights } from './lights.js';
 import { commandSkill, updateSkills } from './skills.js';
 import { updateDefense, siegeHit, defenseActive } from './defense.js';
 import { updateTutorial, startTutorial, skipTutorial } from './tutorial.js';
@@ -40,6 +41,7 @@ function init() {
   const scene = G.scene = new THREE.Scene();
   const camera = G.camera = new THREE.PerspectiveCamera(74, 1, 0.08, 2400); camera.rotation.order = 'YXZ'; scene.add(camera);
   G.world = world; G.player = player; G.ui = ui;
+  initLights(scene); initFlashlight(camera);
   buildWorld(scene); initFx(scene); ui.init(); initInput(canvas); initLayout();
   G.openLayoutEditor = openLayoutEditor; G.cancelLayout = cancelLayout;
   G.commandSkill = commandSkill; G.tutorSkip = skipTutorial; G.onSiegeHit = siegeHit;
@@ -450,7 +452,7 @@ function frame(t) {
   if (!started) { // 標題畫面：環繞軍營
     const a = t / 9000, s = SITES.camp;
     cam.position.set(s.x + Math.cos(a) * 70, s.y + 26, s.z + Math.sin(a) * 70); cam.lookAt(s.x, s.y + 4, s.z);
-    G.now += dt; updateSky(dt, cam.position);
+    G.now += dt; updateSky(dt, cam.position); updateLights(dt);
   } else if (!G.menu) {
     G.now += dt;
     director(dt);
@@ -459,7 +461,7 @@ function frame(t) {
     for (const a of G.actors) a.update(dt);
     for (const a of G.animals) a.update(dt);
     for (const a of G.attendants) a.update(dt);
-    updateAkai(dt); updateWind(dt); updateSkills(dt); updateDefense(dt);
+    updateAkai(dt); updateWind(dt); updateSkills(dt); updateDefense(dt); updateLights(dt);
     separate();
     checkArena(dt);
     updateProjectiles(dt); updatePickups(dt); updateEffects(dt); updateNodes(dt); updateMines(dt);

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { G } from './state.js';
 import { mulberry32, clamp, lerp, smoothstep, fbm, bx, cyl, cone, ball, rock, meshOf, MAT, flagTexture, Grid, dist2, angDiff } from './util.js';
+import { addFire } from './lights.js';
 
 export const HALF = 500, SEG = 200, CELL = 5, WATER = 0;
 const N1 = SEG + 1;
@@ -283,7 +284,7 @@ export function updateSky(dt, camPos) {
   sunDisc.position.copy(camPos).addScaledVector(sunDir, 900); sunDisc.lookAt(camPos); sunDisc.visible = moonDisc.visible = wet < 0.5 && fogW < 0.6;
   moonDisc.position.copy(camPos).addScaledVector(sunDir, -900); moonDisc.lookAt(camPos);
   const t = G.now;
-  for (const f of world.fires) { if (f.light) f.light.intensity = f.base * (0.85 + 0.25 * Math.sin(t * 11 + f.ph) * Math.sin(t * 7.3)); f.flame.scale.y = 1 + 0.25 * Math.sin(t * 13 + f.ph); }
+  for (const f of world.fires) f.flame.scale.y = 1 + 0.25 * Math.sin(t * 13 + f.ph);
   for (const f of world.flags) f.rotation.y = f.userData.ry + Math.sin(t * 1.6 + f.userData.ph) * 0.25;
   if (world.portal) { world.portal.rotation.z += dt * 0.8; world.portal.material.opacity = 0.55 + 0.25 * Math.sin(t * 3); }
   for (const b of world.burning) { b.t -= dt; for (const f of b.fl) f.scale.y = (0.8 + 0.4 * Math.sin(t * 11 + f.userData.ph)) * Math.min(1, b.t / 4); if (b.t <= 0) { G.scene.remove(b.grp); } }
@@ -397,9 +398,8 @@ function campfire(scene, x, z, big = false) {
   addStatic(scene, p, x, y, z, 0, false);
   const flame = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.3, 6), new THREE.MeshBasicMaterial({ color: 0xffa030, transparent: true, opacity: 0.9, fog: false }));
   flame.position.set(x, y + 0.85, z); scene.add(flame);
-  let light = null; // 手機上只保留大營火的光源，減少每個頂點的光照計算
-  if (!G.touch || big) { light = new THREE.PointLight(0xff8a3a, 50, 34, 1.8); light.position.set(x, y + 1.6, z); scene.add(light); }
-  world.fires.push({ light, flame, base: big ? 90 : 50, ph: x });
+  const em = addFire(scene, x, y, z, big); // 光源由 lights.js 統一分配（只點亮最近的幾個），另有光暈與地面暖光
+  world.fires.push({ light: null, flame, em, ph: x });
   world.addCircle(x, z, 0.8, 1);
 }
 function flag(scene, x, z, ch, bg, fg, hgt = 7) {

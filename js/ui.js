@@ -1,5 +1,5 @@
 import { G } from './state.js';
-import { ITEMS, WEAPONS, HOTBAR, RECIPES, SHOP_BUY, SHOP_SELL } from './data.js';
+import { ITEMS, WEAPONS, HOTBAR, RECIPES, SHOP_BUY, SHOP_SELL, CRAFT_CATS } from './data.js';
 import { SITES, riverX, HALF, HOSTILE_SITES } from './world.js';
 import { audio } from './audio.js';
 import { angDiff } from './util.js';
@@ -8,7 +8,7 @@ import { siteVisible } from './world.js';
 import { hasBond, cheaper } from './akai.js';
 import { BM, gunRate } from './blackmarket.js';
 import { drawMap, openMap, initMapUI } from './mapview.js';
-import { icon, applyIcons, WEAPON_ICON } from './icons.js';
+import { icon, cicon, applyIcons, WEAPON_ICON, iconize, iconText } from './icons.js';
 import { resetInput } from './player.js';
 import { SQUAD_CMDS } from './data.js';
 import { followers, squadUsed, squadCap } from './squad.js';
@@ -39,6 +39,7 @@ export const ui = {
     $('btn-tutor').onclick = () => { toggleTutorial(); ui.close(); };
     this.renderDiff();
     initMapUI(); applyIcons();
+    for (const sel of ['#menu-start .cols', '#menu-workshop .ttl', '.map-legend', '#menu-settings h2']) document.querySelectorAll(sel).forEach(e => { e.innerHTML = iconize(e.innerHTML); }); // 靜態文字裡的 emoji 也換成圖示
     addEventListener('resize', () => { ui.dirty = true; }); // 轉向時重算快捷列格子大小
     $('tab-map').insertAdjacentHTML('afterbegin', '<p class="dim" style="margin:0 0 6px">提示：點右上角小地圖（電腦按 M）可開啟能縮放的大地圖。</p>');
     document.querySelectorAll('[data-settings]').forEach(b => b.onclick = () => ui.openSettings());
@@ -143,16 +144,38 @@ export const ui = {
   },
   renderCraft() {
     const P = G.player, box = $('tab-craft'); box.innerHTML = '';
-    for (const r of RECIPES) {
-      if (r.req === 'akai5' && !hasBond(5)) { const row = document.createElement('div'); row.className = 'row'; row.innerHTML = `<div class="nm"><b>🔒 ${r.n}</b><span>與阿凱的羈絆達到 Lv5 後解鎖</span></div>`; box.appendChild(row); continue; }
+    const cat = this.craftCat || 'all';
+    // 先算出每個配方的狀態
+    const info = RECIPES.map(r => {
+      const locked = r.req === 'akai5' && !hasBond(5);
       const owned = (r.weapon && P.owned[r.weapon]) || (r.once && P.count(r.once) > 0);
-      let ok = !owned;
       const nd = Object.fromEntries(Object.entries(r.need).map(([it, n]) => [it, cheaper(n)])); // 阿凱羈絆 Lv5：少用兩成材料
-      let need = Object.entries(nd).map(([it, n]) => { const have = P.count(it); if (have < n) ok = false; return `<span class="${have < n ? 'lack' : ''}">${ITEMS[it].i}${ITEMS[it].n} ${have}/${n}</span>`; }).join('　');
-      if (r.near === 'fire') { const f = nearFire(P.pos, 8); if (!f) ok = false; need += `　<span class="${f ? '' : 'lack'}">🔥營火旁</span>`; }
-      const row = document.createElement('div'); row.className = 'row';
-      const desc = G.touch ? r.d.replace('按 G ', '點 💣 ').replace('按 H ', '點 💊 ') : r.d;
-      row.innerHTML = `<div class="nm"><b>${r.n}</b><span>${desc}</span><div class="need">${need}</div></div>`;
+      let ok = !owned && !locked;
+      for (const [it, n] of Object.entries(nd)) if (P.count(it) < n) ok = false;
+      const fire = r.near === 'fire' ? !!nearFire(P.pos, 8) : true; if (!fire) ok = false;
+      return { r, locked, owned, nd, ok, fire };
+    });
+    // 分類標籤（右上角的數字＝這類目前能做幾樣）
+    const bar = document.createElement('div'); bar.className = 'cats';
+    for (const c of CRAFT_CATS) {
+      const n = info.filter(i => (c.id === 'all' || i.r.cat === c.id) && i.ok).length;
+      const b = document.createElement('button'); b.className = 'cat' + (c.id === cat ? ' on' : '');
+      b.innerHTML = `${c.n}${n ? `<i>${n}</i>` : ''}`;
+      b.onclick = () => { this.craftCat = c.id; this.renderCraft(); };
+      bar.appendChild(b);
+    }
+    box.appendChild(bar);
+    const list = document.createElement('div'); list.className = 'craft-list'; box.appendChild(list);
+    const shown = info.filter(i => cat === 'all' || i.r.cat === cat);
+    if (!shown.length) list.innerHTML = '<p class="dim">這一類目前沒有配方。</p>';
+    for (const { r, locked, owned, nd, ok, fire } of shown) {
+      const row = document.createElement('div'); row.className = 'row craft' + (ok ? ' can' : '') + (locked || owned ? ' done' : '');
+      const out = r.weapon ? icon(WEAPON_ICON(r.weapon)) : cicon(Object.keys(r.give)[0]);
+      if (locked) { row.innerHTML = `<div class="ico">${cicon('lock')}</div><div class="nm"><b>${r.n}</b><span>與阿凱的羈絆達到 Lv5 後解鎖</span></div>`; list.appendChild(row); continue; }
+      let need = Object.entries(nd).map(([it, n]) => { const have = P.count(it); return `<span class="chip${have < n ? ' lack' : ''}">${cicon(it)}${ITEMS[it].n} <em>${have}/${n}</em></span>`; }).join('');
+      if (r.near === 'fire') need += `<span class="chip${fire ? '' : ' lack'}">${cicon('fire-s')}營火旁</span>`;
+      const desc = G.touch ? r.d.replace('按 G ', '點投擲鍵').replace('按 H ', '點金瘡藥鍵') : r.d;
+      row.innerHTML = `<div class="ico">${out}</div><div class="nm"><b>${r.n}</b><span>${desc}</span><div class="need">${need}</div></div>`;
       const b = document.createElement('button'); b.textContent = owned ? '已擁有' : '製作'; b.disabled = !ok;
       b.onclick = () => {
         for (const [it, n] of Object.entries(nd)) P.take(it, n);
@@ -160,7 +183,7 @@ export const ui = {
         if (r.weapon) { P.giveWeapon(r.weapon); for (const [it, n] of Object.entries(r.bonus || {})) P.give(it, n); }
         audio.play('craft'); ui.msg(`製作完成：${r.n}`, 'get'); this.renderCraft();
       };
-      row.appendChild(b); box.appendChild(row);
+      row.appendChild(b); list.appendChild(row);
     }
   },
   renderOrders() {
@@ -172,7 +195,7 @@ export const ui = {
     for (const id in OD.ISSUERS) { const t = OD.repTier(id); h += `<div class="cell">${OD.ISSUERS[id].n}<b>${t.n}</b><br><span class="dim">${OD.OR.rep[id]} 點${t.disc < 1 ? `・${t.disc * 10} 折` : ''}${t.elite && id !== 'mizhu' ? '・可招精銳' : ''}</span></div>`; }
     h += '</div><p class="dim">準時交貨提升聲望：15 點「信賴」9 折、35 點「摯友」8 折並可招募精銳兵種。逾期扣 6 點。</p>';
     if (BM.leak) h += `<h3>軍火外流</h3><p class="dim">賣給黑市的軍火：🪙${BM.leak}${BM.blueprint ? '（含火器圖紙）' : ''}　敵軍火銃兵出現率 ${Math.round(gunRate() * 100)}%。外流越多，結局越黑暗。</p>`;
-    box.innerHTML = h;
+    box.innerHTML = iconize(h);
   },
   renderBag() {
     const P = G.player, box = $('tab-bag');
@@ -182,7 +205,7 @@ export const ui = {
     let any = false;
     for (const it in ITEMS) if (P.count(it) > 0) {
       any = true; const d = ITEMS[it];
-      h += `<div class="cell">${d.i} ${d.n}<b>${P.count(it)}</b>${d.food ? `<button data-use="${it}">食用</button>` : d.heal ? `<button data-use="${it}">使用</button>` : ''}</div>`;
+      h += `<div class="cell">${cicon(it)} ${d.n}<b>${P.count(it)}</b>${d.food ? `<button data-use="${it}">食用</button>` : d.heal ? `<button data-use="${it}">使用</button>` : ''}</div>`;
     }
     box.innerHTML = h + (any ? '' : '<p class="dim">背包空空如也。</p>') + '</div>';
     box.querySelectorAll('[data-use]').forEach(b => b.onclick = () => {
@@ -193,18 +216,18 @@ export const ui = {
   },
   renderMap() { drawMap($('bigmap'), { cx: 0, cz: 0, zoom: 1 }); }, // 背包地圖頁：全圖
   renderShop() {
-    const P = G.player; $('shop-coin').textContent = `🪙 ${P.count('coin')} 五銖錢`;
+    const P = G.player; $('shop-coin').innerHTML = `${cicon('coin')} ${P.count('coin')} 五銖錢`;
     const buy = $('shop-buy'), sell = $('shop-sell'); buy.innerHTML = sell.innerHTML = '';
     const row = (html, label, ok, fn) => {
       const r = document.createElement('div'); r.className = 'row'; r.innerHTML = `<div class="nm">${html}</div>`;
-      const b = document.createElement('button'); b.textContent = label; b.disabled = !ok; b.onclick = () => { fn(); audio.play('coin'); this.renderShop(); }; r.appendChild(b); return r;
+      const b = document.createElement('button'); b.innerHTML = iconText(label); b.disabled = !ok; b.onclick = () => { fn(); audio.play('coin'); this.renderShop(); }; r.appendChild(b); return r;
     };
     for (const s of SHOP_BUY) {
       let name, owned = false; const price = OD.price('mizhu', s.price);
       if (s.once) owned = P.count(s.item) > 0;
-      if (s.item) name = `${ITEMS[s.item].i} ${ITEMS[s.item].n}${s.n > 1 ? ' ×' + s.n : ''}`;
-      else if (s.weapon) { name = `${WEAPONS[s.weapon].i} ${WEAPONS[s.weapon].n}`; owned = P.owned[s.weapon]; }
-      else { name = '🛡️ ' + s.n; owned = P.armor >= s.armor; }
+      if (s.item) name = `${cicon(s.item)} ${ITEMS[s.item].n}${s.n > 1 ? ' ×' + s.n : ''}`;
+      else if (s.weapon) { name = `${icon(WEAPON_ICON(s.weapon))} ${WEAPONS[s.weapon].n}`; owned = P.owned[s.weapon]; }
+      else { name = `${cicon('shield')} ${s.n}`; owned = P.armor >= s.armor; }
       buy.appendChild(row(`<b>${name}</b>`, owned ? '已擁有' : `🪙${price}`, !owned && P.count('coin') >= price, () => {
         P.take('coin', price);
         if (s.item) P.give(s.item, s.n); else if (s.weapon) P.giveWeapon(s.weapon); else { P.armor = s.armor; ui.msg(`穿上了${s.n}`, 'get'); }
@@ -212,7 +235,7 @@ export const ui = {
     }
     for (const s of SHOP_SELL) {
       const n = P.count(s.item); if (!n) continue;
-      sell.appendChild(row(`<b>${ITEMS[s.item].i} ${ITEMS[s.item].n}</b><span>持有 ${n}</span>`, `賣 🪙${s.price}`, true, () => { P.take(s.item); P.give('coin', s.price); }));
+      sell.appendChild(row(`<b>${cicon(s.item)} ${ITEMS[s.item].n}</b><span>持有 ${n}</span>`, `賣 🪙${s.price}`, true, () => { P.take(s.item); P.give('coin', s.price); }));
     }
     if (!sell.children.length) sell.innerHTML = '<p class="dim">沒有可出售的貨物。<br>震天雷（手榴彈）每枚可賣 60 錢。</p>';
   },
@@ -223,10 +246,10 @@ export const ui = {
     if (!node) return this.close();
     this.open('dialog');
     $('dlg-name').textContent = actor.name; $('dlg-title').textContent = actor.def.title || '';
-    $('dlg-text').textContent = node.text;
+    $('dlg-text').innerHTML = iconText(node.text);
     const box = $('dlg-opts'); box.innerHTML = '';
     for (const o of node.opts || [{ t: '告辭' }]) {
-      const b = document.createElement('button'); b.textContent = '▸ ' + o.t; b.disabled = !!o.dis;
+      const b = document.createElement('button'); b.innerHTML = iconText(o.t); b.disabled = !!o.dis;
       b.onclick = () => { const next = o.fn ? o.fn() : null; if (next === 'shop') ui.open('shop'); else if (G.menu === 'dialog') ui.showDialog(actor, next); };
       box.appendChild(b);
     }
@@ -234,7 +257,7 @@ export const ui = {
 
   // ---------- 即時訊息 ----------
   msg(text, cls = 'info') {
-    const d = document.createElement('div'); d.className = cls; d.textContent = text; el.msgs.appendChild(d);
+    const d = document.createElement('div'); d.className = cls; d.innerHTML = iconText(text); el.msgs.appendChild(d);
     while (el.msgs.children.length > (G.touch ? 3 : 6)) el.msgs.firstChild.remove();
     setTimeout(() => { d.style.opacity = 0; setTimeout(() => d.remove(), 700); }, cls === 'quest' || cls === 'say' ? 8000 : 4500);
   },
@@ -266,16 +289,16 @@ export const ui = {
   // ---------- 每幀 HUD ----------
   update(dt) {
     const P = G.player;
-    const bar = (id, v) => { const w = Math.round(v); if (last[id] !== w) { last[id] = w; el[id].style.width = w + '%'; el[id].classList.toggle('low', w < 25); } };
+    const bar = (id, v) => { const w = Math.max(0, Math.round(v)); if (last[id] !== w) { last[id] = w; el[id].style.width = w + '%'; el[id].classList.toggle('low', w < 25); $('v' + id.slice(1)).textContent = w; } };
     bar('b-hp', P.hp / P.maxHp * 100); bar('b-hunger', P.hunger); bar('b-thirst', P.thirst); bar('b-stamina', P.stamina);
     const showDamp = P.damp > 0.5 || raining();
     if (last.showDamp !== showDamp) { last.showDamp = showDamp; el['st-damp'].classList.toggle('hidden', !showDamp); }
-    if (showDamp) { const w = Math.round(P.damp); if (last.damp !== w) { last.damp = w; el['b-damp'].style.width = w + '%'; el['b-damp'].classList.toggle('low', w > 60); } }
+    if (showDamp) { const w = Math.round(P.damp); if (last.damp !== w) { last.damp = w; el['b-damp'].style.width = w + '%'; el['b-damp'].classList.toggle('low', w > 60); $('v-damp').textContent = w + '%'; } }
     const oa = OD.OR.active, ok = oa.length ? `📜 訂單 ${oa.length} 張・最近第 ${Math.min(...oa.map(o => o.due))} 日` : '';
-    if (last.ok !== ok) { last.ok = ok; el['quest-orders'].textContent = ok; }
+    if (last.ok !== ok) { last.ok = ok; el['quest-orders'].innerHTML = iconText(ok); }
     if (hitT > 0) { hitT -= dt; if (hitT <= 0) el.hit.style.opacity = 0; }
     const hh = Math.floor(G.time / 60), mm = Math.floor(G.time % 60 / 10) * 10, ck = `第 ${G.day} 日　${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}　${G.weather.kind !== 'clear' ? weatherIcon() : hh >= 5 && hh < 19 ? '☀️' : '🌙'}` + (G.eastWind > 0 ? `　🌬 東南風 ${Math.floor(G.eastWind / 60)}:${String(Math.floor(G.eastWind % 60)).padStart(2, '0')}` : '');
-    if (last.ck !== ck) { last.ck = ck; el.clock.textContent = ck; }
+    if (last.ck !== ck) { last.ck = ck; el.clock.innerHTML = iconText(ck); }
 
     if (this.dirty || P.reloadT > 0 !== last.rl) {
       this.dirty = false; last.rl = P.reloadT > 0;
@@ -296,7 +319,9 @@ export const ui = {
         $('q-cycle').classList.toggle('hidden', P.ownedThrowables().length < 2);
         this.fitQuick();
       }
-      el.quick.innerHTML = `${icon('grenade')} ${P.count('grenade')} <kbd>G</kbd>　${icon('firebomb')} ${P.count('firebomb')} <kbd>T</kbd>　${icon('mine')} ${P.count('mine')} <kbd>B</kbd><br>${icon('food')} ${food} <kbd>F</kbd>　${icon('water')} ${P.canteen}/3 <kbd>Z</kbd>　${icon('medicine')} ${P.count('medicine')} <kbd>H</kbd><br><span class="coin">${icon('coin')} ${P.count('coin')}</span>`;
+      const q = (ic, n, k) => `<span class="q">${icon(ic)}<b>${n}</b><kbd>${k}</kbd></span>`; // 電腦：快捷道具與按鍵
+      el.quick.innerHTML = q('grenade', P.count('grenade'), 'G') + q('firebomb', P.count('firebomb'), 'T') + q('mine', P.count('mine'), 'B') + q('food', food, 'F') + q('water', P.canteen + '/3', 'Z') + q('medicine', P.count('medicine'), 'H')
+        + `<span class="q coin">${icon('coin')}<b>${P.count('coin')}</b></span><span class="q fl${P.flash ? ' on' : ''}">${icon('flashlight')}<b>${P.flash ? '開' : '關'}</b><kbd>L</kbd></span>`;
     }
 
     // 任務與羅盤
@@ -355,7 +380,7 @@ export const ui = {
       if (G.attendants.length) rows.push(`<div class="att">🧺${G.attendants.map(a => a.name + ' ' + a.carried).join('　')}</div>`);
     }
     const key = rows.join('');
-    if (last.fol !== key) { last.fol = key; el.followers.innerHTML = key; }
+    if (last.fol !== key) { last.fol = key; el.followers.innerHTML = iconize(key); }
     if (G.touch) { // 名將絕技鍵：有名將同行才出現，角標顯示可用數或冷卻秒數
       const ss = skillStatus(), b = $('tq-skill'), k2 = ss ? (ss.ready ? 'r' + ss.ready : 'c' + ss.wait) : '';
       if (last.sk !== k2 && G.menu !== 'layout') { last.sk = k2; b.classList.toggle('hidden', !ss); b.classList.toggle('cd', !!ss && !ss.ready); $('q-skill').textContent = ss ? (ss.ready ? '★' : ss.wait) : ''; this.fitQuick(); }
