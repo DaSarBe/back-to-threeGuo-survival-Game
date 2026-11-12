@@ -294,6 +294,14 @@ export const ui = {
     const showDamp = P.damp > 0.5 || raining();
     if (last.showDamp !== showDamp) { last.showDamp = showDamp; el['st-damp'].classList.toggle('hidden', !showDamp); }
     if (showDamp) { const w = Math.round(P.damp); if (last.damp !== w) { last.damp = w; el['b-damp'].style.width = w + '%'; el['b-damp'].classList.toggle('low', w > 60); $('v-damp').textContent = w + '%'; } }
+    // 特製步槍的熱度條
+    if (WEAPONS[P.cur].heat) {
+      const k = Math.round(P.heat || 0), oh = !!P.overheat;
+      if (last.heat !== k || last.oh !== oh) {
+        last.heat = k; last.oh = oh; const h = $('heat'); h.classList.remove('hidden'); h.classList.toggle('oh', oh); h.classList.toggle('warm', !oh && k >= 70);
+        $('heat-f').style.width = k + '%'; $('heat-t').textContent = oh ? '過熱！冷卻中' : `熱度 ${k}%`;
+      }
+    } else if (last.heat !== -1) { last.heat = -1; last.oh = null; $('heat').classList.add('hidden'); }
     const oa = OD.OR.active, ok = oa.length ? `📜 訂單 ${oa.length} 張・最近第 ${Math.min(...oa.map(o => o.due))} 日` : '';
     if (last.ok !== ok) { last.ok = ok; el['quest-orders'].innerHTML = iconText(ok); }
     if (hitT > 0) { hitT -= dt; if (hitT <= 0) el.hit.style.opacity = 0; }
@@ -310,7 +318,7 @@ export const ui = {
       }
       el.hotbar.innerHTML = own.map((id, i) => `<div class="slot ${P.cur === id ? 'on' : ''}" data-slot="${id}"><small>${i < 10 ? (i + 1) % 10 : ''}</small>${icon(WEAPON_ICON(id))}<em>${WEAPONS[id].n}</em></div>`).join(''); // 只顯示已擁有的兵器
       el['ammo-w'].innerHTML = icon(WEAPON_ICON(P.cur)) + ' ' + w.n + (P.reloadT > 0 ? '　換彈中…' : '');
-      el['ammo-n'].innerHTML = w.type === 'gun' ? `${P.mags[P.cur]} <small>/ ${w.ammo ? P.count(w.ammo) : '∞'}</small>` : w.type === 'bow' ? `${P.count('arrow')} <small>箭</small>` : '';
+      el['ammo-n'].innerHTML = w.heat ? `∞ <small>不用換彈</small>` : w.type === 'gun' ? `${P.mags[P.cur]} <small>/ ${w.ammo ? P.count(w.ammo) : '∞'}</small>` : w.type === 'bow' ? `${P.count('arrow')} <small>箭</small>` : '';
       const food = P.count('cooked') + P.count('ration') + P.count('berry') + P.count('meat');
       if (G.touch) {
         $('q-cmd').textContent = SQUAD_CMDS.find(c => c.id === G.squadCmd).s; $('q-food').textContent = food; $('q-water').textContent = P.canteen; $('q-med').textContent = P.count('medicine');

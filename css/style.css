@@ -434,3 +434,10 @@ body.touch #dlg-opts button { padding: 8px 12px; font-size: 14px; }
   body.touch #boss:not(.hidden) ~ #msgs { top: calc(96px + var(--st)); }
   body.touch #tutor:not(.hidden) ~ #msgs { top: calc(132px + var(--st)); }
 }
+/* 特製步槍熱度條 */
+#heat { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 4px; font-size: 12px; color: #e8dcc0; }
+#heat .bar { width: 120px; height: 8px; border: none; border-radius: 4px; background: rgba(255,255,255,.12); box-shadow: inset 0 1px 2px rgba(0,0,0,.5); }
+#heat-f { display: block; height: 100%; width: 0; border-radius: 4px; background: linear-gradient(90deg, #f0c040, #ff8a30); transition: width .08s; }
+#heat.warm #heat-f { background: linear-gradient(90deg, #ff8a30, #ff3a20); } #heat.warm #heat-t { color: #ffb070; }
+#heat.oh #heat-f { background: #ff3a20; box-shadow: 0 0 8px rgba(255,60,30,.8); } #heat.oh #heat-t { color: #ff6a50; font-weight: bold; animation: blink .35s infinite alternate; }
+body.touch #heat { font-size: 11px; } body.touch #heat .bar { width: 72px; height: 6px; }

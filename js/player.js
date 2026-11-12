@@ -35,7 +35,7 @@ export const player = {
   giveWeapon(id) {
     if (this.owned[id]) return;
     this.owned[id] = true; const k = HOTBAR.filter(w => this.owned[w]).indexOf(id) + 1;
-    if (WEAPONS[id].type === 'gun' && !(this.mags[id] >= 0)) this.mags[id] = this.wstat(id).mag; // 新槍裝滿彈匣（之前特製步槍沒有初始彈匣，會顯示 NaN 而無法射擊）
+    if (WEAPONS[id].type === 'gun' && !WEAPONS[id].heat && !(this.mags[id] >= 0)) this.mags[id] = this.wstat(id).mag; // 新槍裝滿彈匣（之前特製步槍沒有初始彈匣，會顯示 NaN 而無法射擊）
     G.ui.msg(`獲得兵器：${WEAPONS[id].n}（${G.touch ? '點下方兵器列' : k <= 10 ? '按 ' + (k % 10) + ' ' : '滾輪'}切換）`, 'quest'); G.ui.dirty = true;
   },
   equip(id) {
@@ -162,6 +162,7 @@ export const player = {
   // ---- 武器 ----
   reload() {
     const w = this.wstat(this.cur);
+    if (w.heat) return; // 特製步槍不用換彈匣
     if (w.type !== 'gun' || this.reloadT > 0 || this.mags[this.cur] >= w.mag) return;
     if (w.ammo && this.count(w.ammo) <= 0) return G.ui.msg(`沒有${ITEMS[w.ammo].n}了，需要製作。`, 'warn');
     this.reloadT = w.reload; audio.play('reload');
@@ -169,9 +170,19 @@ export const player = {
   fire() {
     const w = this.wstat(this.cur);
     if (this.fireCd > 0 || this.reloadT > 0) return;
-    if (w.type === 'gun') {
+    if (w.type === 'gun' && w.heat) { // 特製步槍：子彈無限、沒有彈匣，但會過熱
+      if (this.overheat) { this.fireCd = 0.3; audio.play('click', 0.5); if (G.now - (this.ohMsgT || -9) > 2.5) { this.ohMsgT = G.now; G.ui.msg('槍管過熱中，等它冷卻……', 'warn'); } return; }
+      this.heat = Math.min(100, (this.heat || 0) + w.heat.shot); this.heatT = G.now; this.fireCd = w.rate;
+      if (this.heat >= 100) {
+        this.overheat = true; audio.play('hiss', 1); G.ui.dirty = true;
+        G.ui.msg(G.flags.heatTold ? '槍管過熱！' : '槍管過熱！特製步槍子彈無限，但連續射擊太久會過熱，冷卻到三成才能再開火。點放比一直按住更有效率。', 'warn');
+        G.flags.heatTold = true;
+      }
+    } else if (w.type === 'gun') {
       if (this.mags[this.cur] <= 0) { audio.play('click'); this.fireCd = 0.25; this.reload(); return; }
       this.mags[this.cur]--; this.fireCd = w.rate; G.ui.dirty = true;
+    }
+    if (w.type === 'gun') {
       // 自製黑火藥彈藥受潮會啞火（手槍是現代子彈，不受影響）
       if (w.ammo && Math.random() < misfireChance()) {
         audio.play('click'); this.fireCd = w.rate * 1.5;
@@ -336,6 +347,15 @@ export function updatePlayer(dt) {
 
   // ---- 武器 ----
   const w = P.wstat(P.cur);
+  if (P.heat > 0) { // 特製步槍散熱（切換到別的兵器時也會繼續冷卻）
+    const H = WEAPONS.smg.heat;
+    if (P.overheat) { P.heat -= dt * H.lockCool; if (P.heat <= H.resume) { P.overheat = false; audio.play('reload', 0.6); G.ui.msg('槍管冷卻了，可以再開火。', 'info'); } }
+    else if (G.now - (P.heatT || 0) > H.delay) P.heat = Math.max(0, P.heat - dt * H.cool);
+    if (P.overheat && P.cur === 'smg' && (P.steamT = (P.steamT || 0) - dt) <= 0) { // 過熱時槍口冒蒸氣
+      P.steamT = 0.12; camDir(D); V.copy(G.camera.position).addScaledVector(D, 0.9); V.x += Math.cos(P.yaw) * 0.22; V.z -= Math.sin(P.yaw) * 0.22; V.y -= 0.16;
+      fxBurst(V, 0xdedede, 2, 0.6, 0.55, 0.035);
+    }
+  }
   if (P.reloadT > 0) {
     P.reloadT -= dt;
     if (P.reloadT <= 0) {
