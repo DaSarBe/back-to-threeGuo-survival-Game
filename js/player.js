@@ -8,6 +8,7 @@ import { spawnArrow, spawnGrenade, placeMine, alertEnemies, fxTracer, fxBurst, s
 import { clamp, lerp, rnd, turnTo, dist2 } from './util.js';
 import { misfireChance, dudChance } from './weather.js';
 import { akai, joined, tryRescue, regenMul } from './akai.js';
+import { diff } from './difficulty.js';
 
 const PI = Math.PI;
 const keys = {}, mouse = { l: false, r: false };
@@ -48,7 +49,7 @@ export const player = {
 
   damage(n, src) {
     if (!this.alive || G.menu) return;
-    n *= (1 - this.armor); this.hp -= n; this.hurtT = 6;
+    n *= (1 - this.armor) * diff().dmgIn; this.hp -= n; this.hurtT = 6;
     G.ui.hurt(n); audio.play('hurt', 0.8); if (G.touch && navigator.vibrate) { try { navigator.vibrate(25); } catch (e) { } } this.shake = Math.max(this.shake, 0.12);
     if (this.hp <= 0 && tryRescue()) { this.hp = 30; this.hurtT = 2; this.shake = 0.3; return; } // 阿凱羈絆 Lv4：緊急救援
     if (this.hp <= 0) {
@@ -61,7 +62,7 @@ export const player = {
     const sp = op ? [op[0] + 2, op[1] + 2] : r === 'coalition' ? [SITES.coalition.x + 4, SITES.coalition.z + 11] : G.stage >= 1 ? world.spots.respawn : [SITES.spawn.x, SITES.spawn.z];
     this.pos.set(sp[0], heightAt(sp[0], sp[1]), sp[1]);
     this.alive = true; this.hp = 70; this.hunger = Math.max(this.hunger, 50); this.thirst = Math.max(this.thirst, 50);
-    const lost = Math.floor(this.count('coin') * 0.3); if (lost) this.inv.coin -= lost;
+    const lost = Math.floor(this.count('coin') * diff().loss); if (lost) this.inv.coin -= lost;
     this.kx = this.kz = 0; this.vy = 0;
     for (const a of G.actors) if (a.target === this) { a.target = null; a.alert = 0; }
     if (G.onRespawn) G.onRespawn();
@@ -317,7 +318,7 @@ export function updatePlayer(dt) {
   P.kx *= Math.max(0, 1 - dt * 5); P.kz *= Math.max(0, 1 - dt * 5);
 
   // ---- 求生數值 ----
-  const drain = P.sprinting && !P.mount ? 1.6 : 1;
+  const drain = (P.sprinting && !P.mount ? 1.6 : 1) * diff().drain;
   P.hunger = Math.max(0, P.hunger - dt * 100 / 840 * drain); P.thirst = Math.max(0, P.thirst - dt * 100 / 600 * drain);
   if (P.hunger <= 0 || P.thirst <= 0) { P.hp -= dt * 1.4; if (P.hp <= 0) { P.hp = 0; P.alive = false; if (P.mount) P.dismount(); G.ui.deathBy(P.thirst <= 0 ? '乾渴' : '飢餓'); return; } }
   else if (P.hurtT <= 0 && P.hp < P.maxHp && P.hunger > 35 && P.thirst > 35) P.hp = Math.min(P.maxHp, P.hp + dt * 1.3 * regenMul());
@@ -420,7 +421,7 @@ export function initInput(canvas) {
     if (e.repeat) return;
     keys[e.code] = true;
     if (e.code.startsWith('Digit')) { const d = +e.code.slice(5), own = HOTBAR.filter(w => P.owned[w]), id = own[(d + 9) % 10]; if (id) P.equip(id); } // 數字鍵依序對應已擁有的兵器
-    else act({ KeyE: 'interact', Space: 'jump', KeyR: 'reload', KeyG: 'grenade', KeyT: 'firebomb', KeyB: 'mine', KeyF: 'eat', KeyH: 'heal', KeyZ: 'drink', KeyX: 'whistle', Tab: 'menu', KeyC: 'menu', KeyI: 'menu', KeyM: 'map', KeyV: 'command', Escape: 'pause', KeyP: 'pause' }[e.code]);
+    else act({ KeyE: 'interact', Space: 'jump', KeyR: 'reload', KeyG: 'grenade', KeyT: 'firebomb', KeyB: 'mine', KeyF: 'eat', KeyH: 'heal', KeyZ: 'drink', KeyX: 'whistle', Tab: 'menu', KeyC: 'menu', KeyI: 'menu', KeyM: 'map', KeyV: 'command', KeyQ: 'skill', Escape: 'pause', KeyP: 'pause' }[e.code]);
   });
   document.addEventListener('keyup', e => { keys[e.code] = false; });
   window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.l = mouse.r = false; });
@@ -512,6 +513,8 @@ function act(a) {
     case 'menu': G.ui.open('inv'); break;
     case 'pause': G.ui.open('pause'); break;
     case 'command': G.cycleCommand(); break;
+    case 'skill': G.commandSkill(); break;
+    case 'tutorskip': G.tutorSkip(); break;
     case 'map': G.ui.openMap(); break;
     case 'music': G.ui.msg(audio.toggleMusic() ? '配樂：開' : '配樂：關', 'info'); break;
   }

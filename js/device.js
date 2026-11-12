@@ -8,6 +8,7 @@ import { ITEMS } from './data.js';
 import { joined, akai } from './akai.js';
 import { followers } from './squad.js';
 import { leakTier } from './blackmarket.js';
+import { canDefend, describe, startDefense, defenseActive, defenseLevel } from './defense.js';
 
 export const FEATURES = [
   { id: 'travel', stage: 5, n: '時空傳送', d: '在友軍營區、前哨營、工坊與傳送門之間瞬間移動（前哨營與驛站也能使用）', hint: '擊敗董卓' },
@@ -51,6 +52,7 @@ function destinations() {
 function nearEnemy() { const P = G.player; return G.actors.some(a => a.alive && a.faction === 'enemy' && Math.hypot(a.pos.x - P.pos.x, a.pos.z - P.pos.z) < 35); }
 function travel(dst) {
   const P = G.player;
+  if (defenseActive()) return '守營戰進行中，不能離開！';
   if (nearEnemy()) return '附近有敵人，現在無法傳送！';
   G.ui.close(); G.ui.fade(true); audio.play('whoosh', 0.8);
   setTimeout(() => {
@@ -81,6 +83,13 @@ export function openHub(id) {
     opts: [
       { t: '💾 存檔並設為重生點', fn: () => { G.flags.respawnAt = id; G.save(); audio.play('quest', 0.5); return { text: '已存檔。戰死時會在這裡重生。', opts: node().opts }; } },
       ...(unlocked('travel') ? [{ t: '🌀 時空傳送', fn: () => travelNode(node) }] : []),
+      ...(G.stage >= 1 ? [{
+        t: defenseActive() ? '⚔ 守營戰進行中……' : `⚔ 守營戰（第 ${defenseLevel()} 級）：擊退來襲的敵軍`, dis: defenseActive(), fn: () => {
+          const why = canDefend(id);
+          if (why) return { text: why, opts: [{ t: '返回', fn: node }] };
+          return { text: describe(id), opts: [{ t: '⚔ 開戰！', fn: () => { G.ui.close(); startDefense(id); return null; } }, { t: '再準備一下。', fn: node }] };
+        },
+      }] : []),
       { t: '🌙 在帳中就寢（夜晚）', fn: () => { G.ui.close(); G.sleep(); return null; } },
       { t: '告辭。' },
     ],

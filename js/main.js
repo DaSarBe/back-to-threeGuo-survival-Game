@@ -17,6 +17,9 @@ import { playIntro, updateIntro, skipIntro } from './intro.js';
 import { syncOutposts, setDeviceActive, outposts, siteVisible } from './world.js';
 import { spawnAkai, updateAkai, AK, akai, joined, addBond } from './akai.js';
 import { updateBarks } from './barks.js';
+import { commandSkill, updateSkills } from './skills.js';
+import { updateDefense, siegeHit, defenseActive } from './defense.js';
+import { updateTutorial, startTutorial, skipTutorial } from './tutorial.js';
 import { initLayout, applyLayout, openLayoutEditor, cancelLayout } from './layout.js';
 import { openHub, openDevice, openMail, updateMail, updateWind, onStageDevice, deviceStatus, homeEnding } from './device.js';
 import { playLvbuDeath, playGoHome, updateStory, skipStory } from './story.js';
@@ -39,6 +42,7 @@ function init() {
   G.world = world; G.player = player; G.ui = ui;
   buildWorld(scene); initFx(scene); ui.init(); initInput(canvas); initLayout();
   G.openLayoutEditor = openLayoutEditor; G.cancelLayout = cancelLayout;
+  G.commandSkill = commandSkill; G.tutorSkip = skipTutorial; G.onSiegeHit = siegeHit;
   G.applySettings('all'); initWorkshopUI();
   const resize = () => {
     const w = innerWidth, h = innerHeight, asp = w / h;
@@ -87,6 +91,7 @@ function start(save) {
     Object.assign(P, { hp: p.hp, hunger: p.hunger, thirst: p.thirst, inv: p.inv, owned: p.owned, mags: p.mags, armor: p.armor, canteen: p.canteen, cur: p.cur, damp: p.damp || 0 });
     loadOrders(save.orders); P.upg = p.upg || {}; P.statsChanged();
   }
+  else { G.flags.diff = S.diff || 'normal'; startTutorial(); } // 新遊戲：套用選好的難度、開啟新手引導
   loadWorkshop(save && save.ws);
   populate();
   if (save && save.p.horse) { const h = spawnHorse(P.pos.x + 3, P.pos.z + 2, save.p.horse === 'red'); h.tame(); P.horse = h; }
@@ -229,6 +234,7 @@ G.onStage = done => {
   syncChapters(); outpostGuards(syncOutposts()); onStageDevice(done);
   if (joined()) addBond(25, '一起完成主線');
   if (done >= 0 && SITES['op_' + ['turban', 'sishui', 'hulao', 'meiwu', 'baima', 'wuchao', 'changban', 'chibi'][done]]) setTimeout(() => ui.msg('⛺ 下一個頭目據點前方設立了友軍前哨營，可在那裡存檔、重生。', 'info'), 5200);
+  if (done === 0) setTimeout(() => ui.msg('🚩 營區的令旗台除了存檔，還能發起「守營戰」：擊退來襲的敵軍領取獎賞。', 'info'), 9000);
   if (done === 4) setTimeout(() => ui.msg('董卓伏誅，然而天下並未太平——袁紹已在北方起兵。', 'quest'), 2500);
   if (done === 8) setTimeout(() => { const e = ending(); document.getElementById('win-title').textContent = e.title; document.getElementById('win-story').innerHTML = e.text; ui.open('win'); }, 3000);
 };
@@ -287,7 +293,7 @@ function director(dt) {
   const cross = t => prev < t && G.time >= t;
   if (cross(300)) { onDawn(); ui.msg(`第 ${G.day} 日，天亮了。`, 'info'); }
   if (cross(1170)) { ui.msg('夜幕降臨……狼群與賊兵開始出沒，回營地或生起戒心。', 'warn'); audio.play('wolf', 0.7); }
-  if (cross(1275) && G.stage >= 1 && !outposts().some(id => siteVisible(id) && dist2(P.pos.x, P.pos.z, SITES[id].x, SITES[id].z) < 45)) { // 前哨營是安全區，不會有夜襲
+  if (cross(1275) && G.stage >= 1 && !defenseActive() && !outposts().some(id => siteVisible(id) && dist2(P.pos.x, P.pos.z, SITES[id].x, SITES[id].z) < 45)) { // 前哨營是安全區，不會有夜襲
     const n = Math.min(3 + G.day, 9);
     if (spawnGroup(n, 55, 75, true)) { ui.msg('⚠ 號角聲響起——有賊兵趁夜來襲！', 'warn'); audio.play('horn'); }
   }
@@ -297,7 +303,7 @@ function director(dt) {
   if (timers.patrol <= 0) {
     timers.patrol = rnd(55, 95);
     const near = G.actors.filter(a => a.alive && a.faction === 'enemy' && dist2(a.pos.x, a.pos.z, P.pos.x, P.pos.z) < 130).length;
-    if (!nearCamp && near < 5) spawnGroup(rndInt(2, G.stage >= 2 ? 4 : 3), 75, 100, false);
+    if (!nearCamp && near < 5 && !defenseActive()) spawnGroup(rndInt(2, G.stage >= 2 ? 4 : 3), 75, 100, false);
   }
   timers.wolf -= dt;
   if (timers.wolf <= 0) {
@@ -453,7 +459,7 @@ function frame(t) {
     for (const a of G.actors) a.update(dt);
     for (const a of G.animals) a.update(dt);
     for (const a of G.attendants) a.update(dt);
-    updateAkai(dt); updateWind(dt);
+    updateAkai(dt); updateWind(dt); updateSkills(dt); updateDefense(dt);
     separate();
     checkArena(dt);
     updateProjectiles(dt); updatePickups(dt); updateEffects(dt); updateNodes(dt); updateMines(dt);
@@ -467,7 +473,7 @@ function frame(t) {
   } else if (G.menu === 'cutscene') {
     updateCutscene(dt); updateSky(dt, cam.position);
   }
-  if (started) updateBarks(G.menu ? 0 : dt); // 選單開著時泡泡暫停並隱藏
+  if (started) { updateBarks(G.menu ? 0 : dt); updateTutorial(dt); } // 選單開著時泡泡暫停並隱藏
   G.renderer.render(G.renderScene || G.scene, cam);
 }
 

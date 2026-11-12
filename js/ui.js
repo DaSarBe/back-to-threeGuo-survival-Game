@@ -15,6 +15,10 @@ import { followers, squadUsed, squadCap } from './squad.js';
 import * as OD from './orders.js';
 import { nearFire, weatherIcon, raining } from './weather.js';
 import { S, DEFAULTS, QUALITY, saveSettings } from './settings.js';
+import { DIFFS, diffId } from './difficulty.js';
+import { skillOf, skillStatus } from './skills.js';
+import { defenseHud } from './defense.js';
+import { toggleTutorial, syncButton } from './tutorial.js';
 
 const $ = id => document.getElementById(id);
 const el = {};
@@ -32,6 +36,8 @@ export const ui = {
     $('btn-music').onclick = () => ui.msg(audio.toggleMusic() ? '配樂：開' : '配樂：關', 'info');
     $('btn-save').onclick = () => { G.save(); ui.msg('已存檔。', 'info'); };
     $('btn-intro').onclick = () => G.replayIntro();
+    $('btn-tutor').onclick = () => { toggleTutorial(); ui.close(); };
+    this.renderDiff();
     initMapUI(); applyIcons();
     addEventListener('resize', () => { ui.dirty = true; }); // 轉向時重算快捷列格子大小
     $('tab-map').insertAdjacentHTML('afterbegin', '<p class="dim" style="margin:0 0 6px">提示：點右上角小地圖（電腦按 M）可開啟能縮放的大地圖。</p>');
@@ -49,6 +55,7 @@ export const ui = {
     for (const m of MENUS) $('menu-' + m).classList.toggle('hidden', m !== name);
     G.menu = name; resetInput(); G.unlockPointer && G.unlockPointer(); document.body.classList.add('menu-open');
     if (name === 'inv') this.tab(this.curTab || 'craft');
+    if (name === 'pause') syncButton();
     if (name === 'shop') this.renderShop();
   },
   close() {
@@ -57,6 +64,17 @@ export const ui = {
   },
   escape() { if (G.menu === 'layout') G.cancelLayout(); else if (G.menu === 'settings') this.closeSettings(); else if (['pause', 'inv', 'shop', 'dialog', 'win', 'workshop', 'map'].includes(G.menu)) this.close(); },
   openMap() { openMap(); },
+  // 開始畫面：新遊戲的難度
+  renderDiff() {
+    const seg = $('diff-seg'); seg.innerHTML = '';
+    if (!DIFFS[S.diff]) S.diff = 'normal';
+    for (const k in DIFFS) {
+      const b = document.createElement('button'); b.textContent = DIFFS[k].n; b.className = S.diff === k ? 'on' : '';
+      b.onclick = () => { S.diff = k; saveSettings(); this.renderDiff(); };
+      seg.appendChild(b);
+    }
+    $('diff-desc').textContent = DIFFS[S.diff].d;
+  },
   // ---------- 設定 ----------
   openSettings() { this.settingsFrom = G.menu || 'pause'; this.open('settings'); this.renderSettings(); },
   closeSettings() { this.open(this.settingsFrom === 'start' ? 'start' : 'pause'); },
@@ -79,6 +97,16 @@ export const ui = {
       q.querySelector('.seg').appendChild(b);
     }
     box.appendChild(q);
+    if (G.started) { // 目前這份存檔的難度
+      const dr = document.createElement('div'); dr.className = 'set-row';
+      dr.innerHTML = '<label>難度</label><div class="seg"></div>';
+      for (const k in DIFFS) {
+        const b = document.createElement('button'); b.textContent = DIFFS[k].n; b.className = diffId() === k ? 'on' : '';
+        b.onclick = () => { G.flags.diff = k; G.save(); this.renderSettings(); };
+        dr.querySelector('.seg').appendChild(b);
+      }
+      box.appendChild(dr);
+    }
     slider('sfx', '音效音量', 0, 1, 0.05, pct);
     slider('music', '配樂音量', 0, 1, 0.05, pct);
     if (G.touch) {
@@ -90,7 +118,7 @@ export const ui = {
       box.appendChild(lr);
     }
     const hint = document.createElement('p'); hint.className = 'dim';
-    hint.textContent = '畫質「自動」：電腦預設高、手機預設中。低畫質關閉陰影並縮短可視距離，最省電。';
+    hint.textContent = (G.started ? `難度「${DIFFS[diffId()].n}」：${DIFFS[diffId()].d}。` : '') + '畫質「自動」：電腦預設高、手機預設中。低畫質關閉陰影並縮短可視距離，最省電。';
     box.appendChild(hint);
     const rs = document.createElement('button'); rs.textContent = '恢復預設'; rs.onclick = () => { Object.assign(S, DEFAULTS); saveSettings(); G.applySettings('all'); this.renderSettings(); };
     box.appendChild(rs);
@@ -287,18 +315,25 @@ export const ui = {
     let boss = null, bd = 80;
     for (const a of G.actors) if (a.alive && a.def.boss) { const d = Math.hypot(a.pos.x - P.pos.x, a.pos.z - P.pos.z); if (d < bd) { bd = d; boss = a; } }
     const shield = boss && boss.arena && !boss.inArena(P);
-    if (boss !== bossRef || shield !== last.shield) {
+    const dh = defenseHud();
+    if (dh) { // 守營戰：頭目血條改顯示軍旗耐久
+      if (bossRef !== 'defense') { bossRef = 'defense'; last.shield = null; el.boss.classList.remove('hidden', 'shield'); el.boss.classList.add('flag'); }
+      if (last.dh !== dh.text) { last.dh = dh.text; el['boss-name'].textContent = dh.text; }
+      el['boss-fill'].style.width = dh.k * 100 + '%';
+    } else if (bossRef === 'defense') { bossRef = null; last.dh = ''; el.boss.classList.remove('flag'); el.boss.classList.add('hidden'); }
+    else if (boss !== bossRef || shield !== last.shield) {
       bossRef = boss; last.shield = shield; el.boss.classList.toggle('hidden', !boss); el.boss.classList.toggle('shield', !!shield);
       if (boss) el['boss-name'].textContent = `${boss.name}　${boss.def.title}` + (shield ? '　⛨護體' : '');
     }
-    if (boss) el['boss-fill'].style.width = Math.max(0, boss.hp / boss.maxHp * 100) + '%';
+    if (boss && !dh) el['boss-fill'].style.width = Math.max(0, boss.hp / boss.maxHp * 100) + '%';
     // 隊伍：名將逐一列出，兵卒依兵種合併
     const f = followers(), gens = f.filter(a => a.def.general), groups = {};
     for (const a of f) if (!a.def.general) { const g = groups[a.id] || (groups[a.id] = { n: 0, hp: 0, name: a.def.short }); g.n++; g.hp += a.hp / a.maxHp; }
     const cmd = SQUAD_CMDS.find(c => c.id === G.squadCmd);
     const rows = [];
     if (f.length) rows.push(`<div class="cmd">⚑ ${cmd.n}　${squadUsed()}/${squadCap()}</div>`);
-    for (const a of gens) rows.push(`<div>⚔️ ${a.name}<span class="bar"><div style="width:${a.hp / a.maxHp * 100}%"></div></span></div>`);
+    const sk = a => { const s = skillOf(a); if (!s) return ''; const c = Math.ceil(a.skillCd || 0); return c > 0 ? `<span class="sk cd">${s.n} ${c}s</span>` : `<span class="sk">★${s.n}</span>`; };
+    for (const a of gens) rows.push(`<div>⚔️ ${a.name}${sk(a)}<span class="bar"><div style="width:${a.hp / a.maxHp * 100}%"></div></span></div>`);
     for (const k in groups) { const g = groups[k]; rows.push(`<div>🛡️ ${g.name} ×${g.n}<span class="bar"><div style="width:${g.hp / g.n * 100}%"></div></span></div>`); }
     for (const a of G.attendants) rows.push(`<div class="att">🧺 ${a.name} ${a.carried}/${a.cap}${a.wait ? '（留守）' : ''}</div>`);
     if (G.touch) { // 手機：濃縮成三行，避免擋到右側按鍵
@@ -308,6 +343,10 @@ export const ui = {
     }
     const key = rows.join('');
     if (last.fol !== key) { last.fol = key; el.followers.innerHTML = key; }
+    if (G.touch) { // 名將絕技鍵：有名將同行才出現，角標顯示可用數或冷卻秒數
+      const ss = skillStatus(), b = $('tq-skill'), k2 = ss ? (ss.ready ? 'r' + ss.ready : 'c' + ss.wait) : '';
+      if (last.sk !== k2 && G.menu !== 'layout') { last.sk = k2; b.classList.toggle('hidden', !ss); b.classList.toggle('cd', !!ss && !ss.ready); $('q-skill').textContent = ss ? (ss.ready ? '★' : ss.wait) : ''; }
+    }
   },
   drawMini() {
     const c = el.minimap, g = c.getContext('2d'), S = 150, R = 110, k = S / (R * 2), P = G.player;

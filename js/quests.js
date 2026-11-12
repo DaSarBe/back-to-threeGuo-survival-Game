@@ -8,6 +8,7 @@ import { raining } from './weather.js';
 import * as WK from './workshop.js';
 import * as CH from './chapters.js';
 import * as BMK from './blackmarket.js';
+import { SKILLS } from './skills.js';
 import { akaiDialog } from './akai.js';
 
 export const QUESTS = [
@@ -91,13 +92,14 @@ function hireNode(a, note = '') {
 function followOpt(a) {
   if (!SAY[a.id] || !SQ.isUnlocked(a.id)) return [];
   if (!SQ.isHired(a.id)) { const c = GENERAL_COST[a.id]; return [{ t: `招攬 ${a.name}（🪙${OD.price(SQ.LORD_OF[a.id], c.coin)} 或 ${SQ.costText(c.res)}）`, fn: () => hireNode(a) }]; }
-  if (a.follow) return [{ t: '請回營待命。', fn: () => { SQ.setGeneralFollow(a, false); return { text: '好，若有戰事，隨時來喚。' }; } }];
+  const sk = SKILLS[a.id], ask = sk ? [{ t: `你的絕技是什麼？`, fn: () => ({ text: `【${sk.n}】${sk.d}。\n冷卻 ${sk.cd} 秒。同行時${G.touch ? '點 ★ 絕技鍵' : '按 Q'}，我便出手。`, opts: [{ t: '返回', fn: () => dialogFor(a) }] }) }] : [];
+  if (a.follow) return [{ t: '請回營待命。', fn: () => { SQ.setGeneralFollow(a, false); return { text: '好，若有戰事，隨時來喚。' }; } }, ...ask];
   return [{
     t: `請隨我出征！（佔 2 名額，目前 ${SQ.squadUsed()}/${SQ.squadCap()}）`, fn: () => {
       const err = SQ.setGeneralFollow(a, true);
       return { text: err ? `（${err}）` : (SAY[a.id].join || '走！') };
     }
-  }];
+  }, ...ask];
 }
 
 // ---------- 招兵買馬 ----------

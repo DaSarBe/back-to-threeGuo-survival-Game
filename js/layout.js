@@ -6,7 +6,7 @@ import { clamp } from './util.js';
 const $ = id => document.getElementById(id);
 export const ITEMS = [
   ['t-fire', '開火（右）'], ['t-fire2', '開火（左）'], ['t-aim', '瞄準'], ['t-jump', '跳躍'], ['t-r', '換彈'],
-  ['tq-eat', '進食'], ['tq-drink', '喝水'], ['tq-heal', '金瘡藥'], ['tq-throw', '投擲'], ['q-cycle', '切換投擲物'], ['tq-whistle', '喚馬'], ['tq-cmd', '隊伍指令'],
+  ['tq-eat', '進食'], ['tq-drink', '喝水'], ['tq-heal', '金瘡藥'], ['tq-throw', '投擲'], ['q-cycle', '切換投擲物'], ['tq-whistle', '喚馬'], ['tq-cmd', '隊伍指令'], ['tq-skill', '名將絕技'],
   ['t-m', '背包'], ['t-p', '暫停'], ['hotbar', '兵器列'], ['ammo', '彈藥資訊'], ['prompt', '互動提示'], ['minimap', '小地圖'], ['joy', '移動搖桿'],
 ];
 const NAME = Object.fromEntries(ITEMS);
@@ -14,6 +14,12 @@ const JOY_DEF = { land: { x: 0.2, y: 0.75, s: 1 }, port: { x: 0.38, y: 0.72, s: 
 export const orient = () => innerWidth > innerHeight ? 'land' : 'port';
 const layoutFor = o => (S.layout && S.layout[o]) || null;
 
+// 舊的自訂配置裡沒有的新按鍵：排在隊伍指令鍵旁邊
+function fallback(L, id) {
+  if (id !== 'tq-skill') return null;
+  const c = L['tq-cmd'];
+  return c ? { x: Math.min(0.96, c.x + 0.075 * c.s), y: c.y, s: c.s } : { x: 0.5, y: 0.6, s: 1 };
+}
 // ---------- 套用 ----------
 function place(el, v) {
   el.style.left = v.x * 100 + '%'; el.style.top = v.y * 100 + '%'; el.style.right = el.style.bottom = 'auto';
@@ -32,7 +38,7 @@ function applyTo(L, fixed) {
       el.dataset.fixed = fixed ? '1' : '';
       continue;
     }
-    const v = L && L[id];
+    const v = L && (L[id] || fallback(L, id));
     if (v) place(el, v); else clear(el);
   }
   placeHint(L && L.minimap);
@@ -55,11 +61,11 @@ export function openLayoutEditor(back) {
   const o = orient(), body = document.body;
   const restore = {
     hud: $('hud').classList.contains('hidden'), touch: $('touch').classList.contains('hidden'),
-    cycle: $('q-cycle').classList.contains('hidden'), prompt: $('prompt').classList.contains('hidden'), promptHtml: $('prompt').innerHTML,
+    cycle: $('q-cycle').classList.contains('hidden'), skill: $('tq-skill').classList.contains('hidden'), prompt: $('prompt').classList.contains('hidden'), promptHtml: $('prompt').innerHTML,
     hotbar: $('hotbar').innerHTML,
   };
   document.querySelectorAll('.menu').forEach(m => m.classList.add('hidden')); body.classList.remove('menu-open');
-  for (const id of ['hud', 'touch', 'q-cycle', 'prompt', 'layout-bar']) $(id).classList.remove('hidden');
+  for (const id of ['hud', 'touch', 'q-cycle', 'tq-skill', 'prompt', 'layout-bar']) $(id).classList.remove('hidden');
   $('prompt').textContent = '互動提示（範例）';
   if (!$('hotbar').children.length) $('hotbar').innerHTML = '<div class="slot on"></div><div class="slot"></div><div class="slot"></div>';
   G.menu = 'layout'; body.classList.add('layout-edit');
@@ -68,7 +74,7 @@ export function openLayoutEditor(back) {
   const def = {}; for (const [id] of ITEMS) if (id !== 'joy') def[id] = measure(id);
   def.joy = { ...JOY_DEF[o] };
   const saved = layoutFor(o);
-  const work = {}; for (const [id] of ITEMS) work[id] = { ...((saved && saved[id]) || def[id]) };
+  const work = {}; for (const [id] of ITEMS) work[id] = { ...((saved && (saved[id] || fallback(saved, id))) || def[id]) };
   ed = { o, work, def, sel: null, fixed: joyFixed(), isDefault: !saved, restore, back, pointers: new Map(), drag: null, pinch: null, barPos: 0 };
   applyTo(work, ed.fixed);
   $('lb-orient').textContent = o === 'land' ? '目前編輯：橫向' : '目前編輯：直向';
@@ -114,7 +120,7 @@ function finish(save) {
   if (ed.sel) $(ed.sel).classList.remove('lb-sel');
   ed = null;
   document.body.classList.remove('layout-edit', 'lb-dragging'); $('layout-bar').classList.add('hidden');
-  $('hud').classList.toggle('hidden', R.hud); $('touch').classList.toggle('hidden', R.touch); $('q-cycle').classList.toggle('hidden', R.cycle);
+  $('hud').classList.toggle('hidden', R.hud); $('touch').classList.toggle('hidden', R.touch); $('q-cycle').classList.toggle('hidden', R.cycle); $('tq-skill').classList.toggle('hidden', R.skill);
   $('prompt').classList.toggle('hidden', R.prompt); $('prompt').innerHTML = R.promptHtml; $('hotbar').innerHTML = R.hotbar;
   if (!$('joy').dataset.fixed) $('joy').style.display = '';
   applyLayout();

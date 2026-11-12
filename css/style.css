@@ -181,7 +181,7 @@ body.touch #followers div { margin: 0; line-height: 1.35; white-space: nowrap; }
 #quest-orders { font-size: 12px; color: #ffd24a; margin-top: 2px; } #quest-orders:empty { display: none; }
 body.touch #quest-orders { font-size: 11px; }
 /* 按鍵放大時，快捷列往左讓開右側按鍵（僅橫向） */
-@media (orientation: landscape) { body.touch #t-quick { transform: translateX(calc(-50% - 22px - (var(--bs, 1) - 1) * 290px)); } }
+@media (orientation: landscape) { body.touch #t-quick { transform: translateX(calc(-50% - 34px - (var(--bs, 1) - 1) * 290px)); } }
 body.touch #t-quick { flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100vw - 16px); }
 body.touch #msgs { top: calc(134px + var(--st)); }
 @media (orientation: portrait) { body.touch #msgs { top: calc(190px + var(--st)); } }
@@ -291,3 +291,26 @@ body.lb-dragging #layout-bar { opacity: .15; pointer-events: none; }
 .set-row .set-wide { flex: 1; padding: 6px 10px; font-size: 14px; }
 .set-row .set-wide + span { width: 5.5em; font-size: 12px; color: #c8b890; }
 @media (max-height: 430px) { #layout-bar .lb-tip { display: none; } #layout-bar button { min-height: 28px; } }
+
+/* ---------- 新手引導、難度、名將絕技 ---------- */
+#tutor { position: absolute; left: 50%; top: 74px; transform: translateX(-50%); width: clamp(260px, calc(100vw - 660px), 430px); background: rgba(18,30,40,.86); border: 1px solid #7ae0ff; border-left: 4px solid #7ae0ff; border-radius: 4px; padding: 6px 12px 8px; font-size: 14px; line-height: 1.55; text-shadow: none; }
+#tutor-h { font-size: 12px; color: #7ae0ff; letter-spacing: .1em; display: flex; gap: 8px; align-items: center; }
+#tutor-x { margin-left: auto; font-style: normal; color: #9ab; cursor: pointer; pointer-events: auto; padding: 2px 4px; }
+#tutor kbd { font-size: 12px; } #tutor strong { color: #ffd24a; }
+#tutor.pop { animation: tutorPop .35s ease-out; } #tutor.done { border-color: #7dff9a; background: rgba(20,50,30,.9); }
+#tutor.done #tutor-h::after { content: '✔ 完成'; color: #7dff9a; margin-left: 6px; }
+@keyframes tutorPop { from { transform: translateX(-50%) scale(.92); opacity: 0; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+body:not(.touch) #tutor-x { display: none; }
+body.touch #tutor { top: calc(54px + var(--st)); width: 42vw; font-size: 12px; padding: 4px 8px 6px; line-height: 1.45; }
+@media (orientation: portrait) { body.touch #tutor { top: calc(190px + var(--st)); width: 86vw; } body.touch #boss:not(.hidden) ~ #tutor { top: calc(196px + var(--st)); } body.touch #tutor:not(.hidden) ~ #msgs { top: calc(268px + var(--st)); } }
+#diff-row { flex-basis: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: #c8b890; margin-bottom: 2px; }
+#diff-row .seg { flex: 0 0 auto; } #diff-row .seg button { padding: 4px 14px; font-size: 13px; min-height: 0; }
+#diff-row em { font-style: normal; font-size: 12px; color: #a89878; flex-basis: 100%; text-align: center; }
+body.touch #diff-row em { display: none; } body.touch #diff-row .seg button { min-height: 30px; }
+#followers .sk { color: #ffd24a; font-size: 11px; margin-left: 4px; } #followers .sk.cd { color: #9a8a6a; }
+#tq-skill { border-color: #ffd24a; } #tq-skill.cd { opacity: .55; }
+#boss:not(.hidden) ~ #tutor { top: 122px; } body.touch #boss:not(.hidden) ~ #tutor { top: calc(88px + var(--st)); }
+#boss.flag #boss-name { color: #ffd24a; letter-spacing: 1px; font-size: 16px; } #boss.flag #boss-fill { background: linear-gradient(#e8c84a, #9a7a10); }
+body.touch #boss.flag #boss-name { font-size: 12px; }
+#menu-start .btns { background: linear-gradient(transparent, #1a140e 16px); padding-top: 22px; }
+body.touch #menu-start .btns { background: linear-gradient(transparent, #1a140e 12px); padding-top: 16px; }

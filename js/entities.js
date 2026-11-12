@@ -8,6 +8,9 @@ import { clamp, lerp, rnd, rndInt, pick, dist2, angDiff, turnTo, raySphere, make
 import { damageTargets } from './world.js';
 import { raining } from './weather.js';
 import { bark, idleChatter, say } from './barks.js';
+import { diff } from './difficulty.js';
+// 友軍攻擊加成（劉備的「仁德激勵」）
+const allyBuff = a => a.faction === 'ally' && G.now < (G.allyBuffT || 0) ? 1.35 : 1;
 
 const PI = Math.PI;
 const V = new THREE.Vector3(), V2 = new THREE.Vector3();
@@ -93,6 +96,7 @@ export class Actor {
       return false;
     }
     if (this.def.boss && src instanceof Actor) n *= 0.4;
+    if (src === G.player) n *= diff().dmgOut; // 難度：玩家造成的傷害
     this.hp -= n; this.alert = 12;
     if (this.hp > 0) {
       this.flinch = 0.28; if (this.emo && this.emo.k !== 'warcry') this.emo = null;
@@ -107,6 +111,33 @@ export class Actor {
     if (this.def.flee && this.hp <= this.maxHp * this.def.flee) { this.die(src, true); return true; } // 曹操：重傷即敗走
     if (this.hp <= 0) this.die(src);
     return true;
+  }
+  // 被震懾（暈眩搖晃）或施展絕技（姿勢由 skills.js 指定）時的更新
+  special(dt) {
+    const m = this.m, t = G.now, k = Math.min(1, dt * 14);
+    let aLx = 0.15, aRx = 0.15, aLz = 0, aRz = 0, iRx = 0, iRy = 0, iZ = 0;
+    if (this.stunT > 0 && !this.skillBusy) {
+      this.stunT -= dt; this.wind = 0; this.charge = 0; this.curSpeed = 0;
+      iRx = 0.28 + Math.sin(t * 9 + this.ph0) * 0.07; iRy = Math.sin(t * 5 + this.ph0) * 0.3; aLx = aRx = 0.25;
+      if ((this.starT = (this.starT || 0) - dt) <= 0) { this.starT = 0.35; V.set(this.pos.x + rnd(-0.3, 0.3), this.pos.y + 2.05 * this.scale + this.seat, this.pos.z + rnd(-0.3, 0.3)); fxBurst(V, 0xffe680, 3, 1.2, 0.4, 0.1); }
+      this.pos.y = Math.max(heightAt(this.pos.x, this.pos.z), WATER - 1.1);
+    } else {
+      switch (this.skillPose) {
+        case 'raise': aRx = -2.9; iRx = -0.1; aLx = -0.5; break;
+        case 'sweep': aRx = -1.5; aRz = -0.9; aLx = -1.2; aLz = 0.6; iRx = 0.2; break;
+        case 'roar': aRx = -0.9; aRz = -1.1; aLx = -0.9; aLz = 1.1; iRx = -0.22; break;
+        case 'thrust': aRx = -1.55; aLx = -1.3; aLz = 0.4; iRx = 0.25; iZ = 0.2; break;
+        case 'slam': aRx = -0.3; aLx = -0.3; iRx = 0.4; break;
+      }
+      this.wind = 0; this.curSpeed = 0;
+      this.pos.y = Math.max(heightAt(this.pos.x, this.pos.z), WATER - 1.1) + (this.skillY || 0);
+    }
+    m.armR.rotation.x = lerp(m.armR.rotation.x, aRx, k); m.armR.rotation.z = lerp(m.armR.rotation.z, aRz, k);
+    m.armL.rotation.x = lerp(m.armL.rotation.x, aLx, k); m.armL.rotation.z = lerp(m.armL.rotation.z, aLz, k);
+    m.inner.rotation.x = lerp(m.inner.rotation.x, iRx, k); m.inner.rotation.y = lerp(m.inner.rotation.y, iRy, k); m.inner.position.z = lerp(m.inner.position.z, iZ, k);
+    if (!this.horse) { m.legL.rotation.x = lerp(m.legL.rotation.x, 0, k); m.legR.rotation.x = lerp(m.legR.rotation.x, 0, k); m.inner.position.y = lerp(m.inner.position.y, 0, k); }
+    m.root.position.copy(this.pos); m.root.rotation.y = this.yaw;
+    if (this.arena) this.arena.mat.opacity = 0.75 + 0.25 * Math.sin(G.now * 3);
   }
   // 是否正在與玩家單挑
   get dueling() { return G.battle && G.battle.mode === 'duel' && G.battle.boss === this; }
@@ -161,9 +192,12 @@ export class Actor {
       if (B && this !== B && B.arena && d2(this.pos, B.home) < B.arena.R + 15) return null; // 單挑時，敵方士卒在旁觀戰
       if (B === this) return P.alive && this.inArena(P) ? P : null;                          // 單挑時，敵將只對付玩家
       const ok = o => !this.arena || this.inArena(o); // 敵將只追擊決戰圈內的對手
+      if (this.siegeOnly) return null; // 守營戰的破旗手：只管砍軍旗
+      // 守營戰的敵軍只對付擋在面前（13 步內）的守軍，其餘直撲軍旗
+      const allyR = this.siege ? 13 : Math.max(see, 32), plyR = this.siege ? 13 : see;
       // 優先攻擊視野內最近的我方兵卒或武將；附近沒有隊友才攻擊玩家
-      for (const a of G.actors) if (a.alive && a.faction === 'ally' && !a.def.noncombat && ok(a)) { const d = d2(this.pos, a.pos); if (d < Math.max(see, 32) && d < bd) { best = a; bd = d; } }
-      if (!best && P.alive && ok(P) && d2(this.pos, P.pos) < see) best = P;
+      for (const a of G.actors) if (a.alive && a.faction === 'ally' && !a.def.noncombat && ok(a)) { const d = d2(this.pos, a.pos); if (d < allyR && d < bd) { best = a; bd = d; } }
+      if (!best && P.alive && ok(P) && d2(this.pos, P.pos) < plyR) best = P;
     } else {
       const [anchor, range] = this.leash();
       const B = G.battle && G.battle.mode === 'duel' ? G.battle.boss : null;
@@ -200,6 +234,7 @@ export class Actor {
 
     this.atkT -= dt; this.alert -= dt; this.specialT -= dt;
     if (this.faction === 'ally' && this.hp < this.maxHp) this.hp = Math.min(this.maxHp, this.hp + this.maxHp * 0.012 * dt);
+    if (this.stunT > 0 || this.skillBusy) { this.special(dt); return; } // 被震懾，或正在施展絕技
 
     // ---- 目標 ----
     this.retT -= dt;
@@ -209,6 +244,7 @@ export class Actor {
       const t = this.target;
       if (t && (t.alive === false || d2(this.pos, t.pos) > (this.alert > 0 ? 130 : 75))) this.target = null;
       if (this.target && this.arena && !this.inArena(this.target)) this.target = null;
+      if (this.siege && this.target && (this.siegeOnly || d2(this.pos, this.target.pos) > 20)) this.target = null; // 守營戰：不追遠處的對手
       if (this.target && G.battle && G.battle.mode === 'duel') {
         const B = G.battle.boss;
         if (this.faction === 'ally' && B.arena && d2(this.target.pos, B.home) < B.arena.R + 2) this.target = null;
@@ -260,7 +296,7 @@ export class Actor {
             else {
               const ty = tg.pos.y + (tg === P ? P.eyeH * 0.8 : 1.2), L = Math.hypot(dx, ty - V.y, dz) || 1, sp = 140, e = 0.035;
               V2.set(dx / L + rnd(-e, e), (ty - V.y) / L + rnd(-e, e) * 0.6, dz / L + rnd(-e, e)).normalize().multiplyScalar(sp);
-              spawnArrow(V, V2, this, d.dmg, 'bullet'); audio.playAt('rifle', dp, 0.9); fxBurst(V, 0xffc060, 6, 2, 0.15, 0.15);
+              spawnArrow(V, V2, this, d.dmg * allyBuff(this), 'bullet'); audio.playAt('rifle', dp, 0.9); fxBurst(V, 0xffc060, 6, 2, 0.15, 0.15);
             }
           } else if (d.ranged) {
             V.set(this.pos.x, this.pos.y + 1.5 * this.scale, this.pos.z);
@@ -269,9 +305,9 @@ export class Actor {
             const err = 0.045;
             V2.set(dx / t, (ty - V.y) / t + 0.5 * g * t, dz / t);
             V2.x += rnd(-1, 1) * sp * err; V2.z += rnd(-1, 1) * sp * err; V2.y += rnd(-1, 1) * sp * err * 0.5;
-            spawnArrow(V, V2, this, d.dmg); audio.playAt('bow', dp, 0.8);
+            spawnArrow(V, V2, this, d.dmg * allyBuff(this)); audio.playAt('bow', dp, 0.8);
           } else if (dist < reach + 0.9) {
-            tg.damage(d.dmg * (0.85 + rnd(0.3)), this);
+            tg.damage(d.dmg * (0.85 + rnd(0.3)) * allyBuff(this), this);
             audio.playAt(tg === P ? 'hit' : 'clang', dp, 0.9);
           }
         }
@@ -305,6 +341,14 @@ export class Actor {
           }
           this.specialT = 1;
         }
+      }
+    } else if (this.siege) { // 守營戰：沒有對手時直撲軍旗
+      const sx = this.siege.x - this.pos.x, sz = this.siege.z - this.pos.z, sd = Math.hypot(sx, sz), need = d.ranged ? 16 : 3.2;
+      if (sd > need && this.wind <= 0) { goal = this.siege; speed = d.speed; }
+      else {
+        face = Math.atan2(sx, sz);
+        if (this.wind > 0) { this.wind -= dt; if (this.wind <= 0) { this.atkT = d.cd * (0.9 + rnd(0.3)); audio.playAt(d.ranged ? 'bow' : 'chop', dp, 0.7); if (G.onSiegeHit) G.onSiegeHit(this, d.dmg); } }
+        else if (this.atkT <= 0) { this.wind = this.windTot = d.ranged ? 0.75 : 0.5; }
       }
     } else if (this.follow && G.squadCmd === 'hold' && G.holdPos) {
       const i = this.slotIdx || 0, a = i * 2.4, r = 1.6 + i * 0.7;
