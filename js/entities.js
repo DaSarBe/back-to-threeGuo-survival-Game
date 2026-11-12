@@ -126,8 +126,9 @@ export class Actor {
       if (B && this !== B && B.arena && d2(this.pos, B.home) < B.arena.R + 15) return null; // 單挑時，敵方士卒在旁觀戰
       if (B === this) return P.alive && this.inArena(P) ? P : null;                          // 單挑時，敵將只對付玩家
       const ok = o => !this.arena || this.inArena(o); // 敵將只追擊決戰圈內的對手
-      if (P.alive && ok(P)) { const d = d2(this.pos, P.pos); if (d < see) { best = P; bd = d * 0.8; } }
-      for (const a of G.actors) if (a.alive && a.faction === 'ally' && !a.def.noncombat && ok(a)) { const d = d2(this.pos, a.pos); if (d < 32 && d < bd) { best = a; bd = d; } }
+      // 優先攻擊視野內最近的我方兵卒或武將；附近沒有隊友才攻擊玩家
+      for (const a of G.actors) if (a.alive && a.faction === 'ally' && !a.def.noncombat && ok(a)) { const d = d2(this.pos, a.pos); if (d < Math.max(see, 32) && d < bd) { best = a; bd = d; } }
+      if (!best && P.alive && ok(P) && d2(this.pos, P.pos) < see) best = P;
     } else {
       const [anchor, range] = this.leash();
       const B = G.battle && G.battle.mode === 'duel' ? G.battle.boss : null;
@@ -179,7 +180,7 @@ export class Actor {
         if (this === B && this.target !== P) this.target = null;
       }
       if (this.target && this.follow) { const [an, , drop] = this.leash(); if (d2(an, this.target.pos) > drop) this.target = null; }
-      if (!this.target || this.target !== P || this.faction === 'ally') { const nt = this.findTarget(); if (nt) this.target = nt; }
+      { const nt = this.findTarget(); if (nt) this.target = nt; } // 每次重新評估目標（敵人會改打靠近的隊友）
       if (!this.roam && !this.follow && this.target && dist2(this.pos.x, this.pos.z, this.home.x, this.home.z) > (this.faction === 'ally' ? 45 : 150)) { this.target = null; this.alert = 0; }
     }
 
@@ -679,7 +680,7 @@ export function explode(pos, radius, dmg, byPlayer) {
 // 燃燒彈：地面起火，持續灼燒範圍內的敵人（雨天燒得短）
 const flameGeo = new THREE.ConeGeometry(0.45, 1.4, 5);
 export function fireZone(at) {
-  const R = 5, x = at.x, z = at.z, wet = G.weatherF > 0.6, dur = wet ? 3.5 : 7;
+  const wind = G.eastWind > 0, R = wind ? 7 : 5, x = at.x, z = at.z, wet = G.weatherF > 0.6 && !wind, dur = wet ? 3.5 : 7; // 東南風：火勢更大
   const grp = new THREE.Group(), mat = new THREE.MeshBasicMaterial({ color: 0xff8a20, transparent: true, opacity: 0.85, fog: false, depthWrite: false });
   const fl = [];
   for (let i = 0; i < 14; i++) {
@@ -698,10 +699,10 @@ export function fireZone(at) {
       if (tick <= 0) {
         tick = 0.5;
         const P = G.player;
-        for (const a of G.actors) if (a.alive && a.faction === 'enemy' && Math.hypot(a.pos.x - x, a.pos.z - z) < R) a.damage(10, P);
+        for (const a of G.actors) if (a.alive && a.faction === 'enemy' && Math.hypot(a.pos.x - x, a.pos.z - z) < R) a.damage(wind ? 15 : 10, P);
         for (const a of G.animals) if (a.alive && a.kind !== 'horse' && Math.hypot(a.pos.x - x, a.pos.z - z) < R) a.damage(10, P);
         if (P.alive && Math.hypot(P.pos.x - x, P.pos.z - z) < R) P.damage(4, null);
-        damageTargets(x, z, R, 8);
+        damageTargets(x, z, R, wind ? 12 : 8);
         if (Math.random() < 0.5) fxBurst(V.set(x + rnd(-R, R) * 0.6, heightAt(x, z) + 0.5, z + rnd(-R, R) * 0.6), 0x4a3a30, 5, 2, 1.2, 0.3);
       }
       if (t >= dur) { G.scene.remove(grp); mat.dispose(); return false; }

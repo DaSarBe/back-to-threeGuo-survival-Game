@@ -3,7 +3,9 @@ import { ITEMS, WEAPONS, HOTBAR, RECIPES, SHOP_BUY, SHOP_SELL } from './data.js'
 import { SITES, riverX, HALF, HOSTILE_SITES } from './world.js';
 import { audio } from './audio.js';
 import { angDiff } from './util.js';
-import { QUESTS, dialogFor, questSite } from './quests.js';
+import { QUESTS, dialogFor, questSite, akaiPending } from './quests.js';
+import { siteVisible } from './world.js';
+import { hasBond, cheaper } from './akai.js';
 import { BM, gunRate } from './blackmarket.js';
 import { drawMap, openMap, initMapUI } from './mapview.js';
 import { icon, applyIcons, WEAPON_ICON } from './icons.js';
@@ -95,16 +97,18 @@ export const ui = {
   renderCraft() {
     const P = G.player, box = $('tab-craft'); box.innerHTML = '';
     for (const r of RECIPES) {
+      if (r.req === 'akai5' && !hasBond(5)) { const row = document.createElement('div'); row.className = 'row'; row.innerHTML = `<div class="nm"><b>🔒 ${r.n}</b><span>與阿凱的羈絆達到 Lv5 後解鎖</span></div>`; box.appendChild(row); continue; }
       const owned = (r.weapon && P.owned[r.weapon]) || (r.once && P.count(r.once) > 0);
       let ok = !owned;
-      let need = Object.entries(r.need).map(([it, n]) => { const have = P.count(it); if (have < n) ok = false; return `<span class="${have < n ? 'lack' : ''}">${ITEMS[it].i}${ITEMS[it].n} ${have}/${n}</span>`; }).join('　');
+      const nd = Object.fromEntries(Object.entries(r.need).map(([it, n]) => [it, cheaper(n)])); // 阿凱羈絆 Lv5：少用兩成材料
+      let need = Object.entries(nd).map(([it, n]) => { const have = P.count(it); if (have < n) ok = false; return `<span class="${have < n ? 'lack' : ''}">${ITEMS[it].i}${ITEMS[it].n} ${have}/${n}</span>`; }).join('　');
       if (r.near === 'fire') { const f = nearFire(P.pos, 8); if (!f) ok = false; need += `　<span class="${f ? '' : 'lack'}">🔥營火旁</span>`; }
       const row = document.createElement('div'); row.className = 'row';
       const desc = G.touch ? r.d.replace('按 G ', '點 💣 ').replace('按 H ', '點 💊 ') : r.d;
       row.innerHTML = `<div class="nm"><b>${r.n}</b><span>${desc}</span><div class="need">${need}</div></div>`;
       const b = document.createElement('button'); b.textContent = owned ? '已擁有' : '製作'; b.disabled = !ok;
       b.onclick = () => {
-        for (const [it, n] of Object.entries(r.need)) P.take(it, n);
+        for (const [it, n] of Object.entries(nd)) P.take(it, n);
         if (r.give) for (const [it, n] of Object.entries(r.give)) P.give(it, n);
         if (r.weapon) { P.giveWeapon(r.weapon); for (const [it, n] of Object.entries(r.bonus || {})) P.give(it, n); }
         audio.play('craft'); ui.msg(`製作完成：${r.n}`, 'get'); this.renderCraft();
@@ -223,7 +227,7 @@ export const ui = {
     const oa = OD.OR.active, ok = oa.length ? `📜 訂單 ${oa.length} 張・最近第 ${Math.min(...oa.map(o => o.due))} 日` : '';
     if (last.ok !== ok) { last.ok = ok; el['quest-orders'].textContent = ok; }
     if (hitT > 0) { hitT -= dt; if (hitT <= 0) el.hit.style.opacity = 0; }
-    const hh = Math.floor(G.time / 60), mm = Math.floor(G.time % 60 / 10) * 10, ck = `第 ${G.day} 日　${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}　${G.weather.kind !== 'clear' ? weatherIcon() : hh >= 5 && hh < 19 ? '☀️' : '🌙'}`;
+    const hh = Math.floor(G.time / 60), mm = Math.floor(G.time % 60 / 10) * 10, ck = `第 ${G.day} 日　${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}　${G.weather.kind !== 'clear' ? weatherIcon() : hh >= 5 && hh < 19 ? '☀️' : '🌙'}` + (G.eastWind > 0 ? `　🌬 東南風 ${Math.floor(G.eastWind / 60)}:${String(Math.floor(G.eastWind % 60)).padStart(2, '0')}` : '');
     if (last.ck !== ck) { last.ck = ck; el.clock.textContent = ck; }
 
     if (this.dirty || P.reloadT > 0 !== last.rl) {
@@ -249,7 +253,8 @@ export const ui = {
 
     // 任務與羅盤
     const q = QUESTS[G.stage];
-    if (last.stage !== G.stage) { last.stage = G.stage; el['quest-t'].textContent = '【' + q.t + '】'; el['quest-d'].textContent = q.d; }
+    const qk = G.stage + (akaiPending() ? 'A' : '');
+    if (last.stage !== qk) { last.stage = qk; el['quest-t'].textContent = akaiPending() ? '【穿越者】' : '【' + q.t + '】'; el['quest-d'].textContent = akaiPending() ? '傳送門突然有人摔了出來！前往穿越之地，找到那位穿越者。' : q.d; }
     let qa = null;
     const qs = questSite(q);
     if (qs) {
@@ -306,6 +311,7 @@ export const ui = {
     g.font = 'bold 11px serif'; g.textAlign = 'center';
     const q = QUESTS[G.stage];
     for (const id in SITES) {
+      if (!siteVisible(id)) continue;
       const s = SITES[id]; let x = X(s.x), z = Z(s.z); const isQ = questSite(q) === id;
       const dx = x - S / 2, dz = z - S / 2, d = Math.hypot(dx, dz);
       if (d > S / 2 - 8) { if (!isQ) continue; x = S / 2 + dx / d * (S / 2 - 9); z = S / 2 + dz / d * (S / 2 - 9); }

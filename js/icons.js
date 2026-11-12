@@ -47,6 +47,9 @@ const ICONS = {
   'w-qixing': SWORD('<circle cx="10.4" cy="13.6" r=".6" fill="currentColor"/><circle cx="12.6" cy="11.4" r=".6" fill="currentColor"/><circle cx="14.8" cy="9.2" r=".6" fill="currentColor"/><circle cx="17" cy="7" r=".6" fill="currentColor"/>'),
   'w-qinggang': SWORD('<path d="M3 21c-.2 1.4.4 2 1.4 2M3 21c-1.4.2-2 .8-1.8 1.8" opacity=".8"/>'),
   'w-yitian': SWORD('<path class="f" d="M5.2 14.4l4.4 4.4-1.6.8-3.6-3.6z"/>'),
+  'w-smg': '<path d="M2 10.6h5"/><path class="f" d="M7 8.6h11.4l3 2.2-1 3.6-3.4-1.6H7z"/><path class="f" d="M9.4 12.8h2.4l-.6 6.4H9z"/><path d="M13.6 12.8l.8 3M15.6 8.6V7.2"/><path d="M10 10.4h5" opacity=".7"/>',
+  wind: '<path d="M3 8.4h11a2.6 2.6 0 1 0-2.6-2.6M3 12.4h15a2.6 2.6 0 1 1-2.6 2.6M3 16.4h7"/>',
+  device: '<rect class="f" x="3.6" y="9" width="16.8" height="10" rx="1.6"/><path d="M6.4 9 8 4.6h8L17.6 9M8 13h8M8 16h5"/>',
   'w-tbow': '<path class="f" d="M4.6 3.6C13 4.4 19.6 11 20.4 19.4l-1.6.2C18 12 12 6 4.4 5.2z"/><path d="M4.6 3.6 3 2.6M20.4 19.4l1 1.6"/><path d="M4.5 4.4 19.6 19.5" opacity=".6"/><path d="M3 21 15.4 8.6"/><path class="f" d="M15.4 8.6l-.6 3 3.6-3.6-3 .6z"/>',
 };
 export const WEAPON_ICON = id => 'w-' + id;

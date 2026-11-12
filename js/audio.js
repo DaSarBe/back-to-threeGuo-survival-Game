@@ -25,6 +25,7 @@ function noise(dur, vol, ftype, f0, f1, delay = 0) {
 const SOUNDS = {
   pistol(v) { noise(0.14, 0.9 * v, 'bandpass', 2200, 300); tone('sine', 170, 50, 0.12, 0.7 * v); },
   shotgun(v) { noise(0.35, 1.1 * v, 'lowpass', 2600, 150); tone('sine', 120, 35, 0.25, 0.9 * v); },
+  smg(v) { noise(0.07, 0.7 * v, 'bandpass', 2600, 500); tone('sine', 190, 60, 0.07, 0.5 * v); },
   rifle(v) { noise(0.09, 1.0 * v, 'highpass', 1500, 600); noise(0.5, 0.6 * v, 'lowpass', 1800, 120); tone('sine', 200, 40, 0.18, 0.8 * v); },
   click(v) { tone('square', 1400, 900, 0.03, 0.15 * v); },
   reload(v) { tone('square', 900, 500, 0.04, 0.15 * v); tone('square', 1300, 800, 0.04, 0.18 * v, 0.25); noise(0.06, 0.2 * v, 'highpass', 3000, 2000, 0.5); },

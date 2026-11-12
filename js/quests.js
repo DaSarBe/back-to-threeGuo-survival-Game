@@ -8,6 +8,7 @@ import { raining } from './weather.js';
 import * as WK from './workshop.js';
 import * as CH from './chapters.js';
 import * as BMK from './blackmarket.js';
+import { akaiDialog } from './akai.js';
 
 export const QUESTS = [
   { t: '亂世求生', d: '打開身旁的軍火箱，然後前往東南方的劉備軍營，找劉備談談。', site: 'camp' },
@@ -48,7 +49,9 @@ export function checkQuest() {
   if ((q.boss && G.killed[q.boss]) || (q.bosses && q.bosses.every(b => G.killed[b])) || (q.burn && CH.allBurned(q.burn))) advance();
 }
 // 目前任務指向的據點（白馬／延津依未擊敗的頭目切換）
+export const akaiPending = () => !!(G.flags.akai && G.flags.akai.arrived && !G.flags.akai.joined);
 export function questSite(q = QUESTS[G.stage]) {
+  if (akaiPending()) return 'spawn'; // 先去找穿越者阿凱
   if (q.bossSites) { for (const b of q.bosses) if (!G.killed[b]) return q.bossSites[b]; return null; }
   return q.site || null;
 }
@@ -270,6 +273,7 @@ function blueprintNode(a) {
 export function dialogFor(a) {
   const P = G.player, s = G.stage;
   if (a.id === 'attendant') return attendantDialog(a);
+  if (a.id === 'akai') return akaiDialog(a);
   switch (a.id) {
     case 'mizhu':
       return { text: '在下糜竺，世代經商。足下也是生意人？妙極！\n你那「震天雷」若肯割愛，在下願出高價收購。' + (OD.repTier('mizhu').disc < 1 ? `\n（老主顧，貨價 ${OD.repTier('mizhu').disc * 10} 折）` : ''), opts: [{ t: '看看貨物。', fn: () => 'shop' }, ...orderOpt(a), BYE] };

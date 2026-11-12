@@ -5,6 +5,7 @@ import { world, SITES } from './world.js';
 import { audio } from './audio.js';
 import { quality } from './settings.js';
 import { rnd, lerp, clamp, dist2 } from './util.js';
+import { dampMul, misfireMul } from './akai.js';
 
 export const WEATHERS = {
   clear: { n: '晴', i: '☀️' },
@@ -48,6 +49,7 @@ export function nearFire(p, r = 7) { return world.fires.some(f => dist2(f.flame.
 export function sheltered(p) {
   for (const id of ['camp', 'coalition']) { const s = SITES[id]; if (dist2(p.x, p.z, s.x, s.z) < s.r) return true; }
   if (G.ws && G.ws.built && dist2(p.x, p.z, SITES.workshop.x, SITES.workshop.z) < 9) return true; // 工坊棚下
+  for (const k in SITES) { const s = SITES[k]; if (s.outpost && G.stage >= s.stage && dist2(p.x, p.z, s.x, s.z) < s.r) return true; } // 前哨營帳下
   return nearFire(p);
 }
 export const raining = () => W.kind === 'rain' && G.weatherF > 0.5;
@@ -83,7 +85,7 @@ export function updateWeather(dt) {
   // 火藥受潮
   if (!P.alive) return;
   const exposed = raining() && !sheltered(P.pos), cloth = P.count('oilcloth') > 0;
-  if (exposed) P.damp = Math.min(100, P.damp + dt * (cloth ? 0.7 : 2.2));
+  if (exposed) P.damp = Math.min(100, P.damp + dt * (cloth ? 0.7 : 2.2) * dampMul());
   else P.damp = Math.max(0, P.damp - dt * (nearFire(P.pos) ? 6 : 1.2));
   if (exposed && !cloth && P.damp >= 60 && P.count('powder') > 0) {
     wetT += dt;
@@ -95,7 +97,7 @@ export function updateWeather(dt) {
 }
 
 // 自製黑火藥彈藥啞火機率（手槍不受影響）
-export const misfireChance = () => (G.player.damp / 100) * 0.55;
+export const misfireChance = () => (G.player.damp / 100) * 0.55 * misfireMul();
 export const dudChance = () => (G.player.damp / 100) * 0.6;
 export const weatherIcon = () => WEATHERS[W.kind].i;
 export const weatherName = () => WEATHERS[W.kind].n;

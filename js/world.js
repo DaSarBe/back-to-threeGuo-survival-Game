@@ -24,6 +24,22 @@ export const SITES = {
   blackmarket: { x: -90, z: -70, r: 10, name: '黑市' },
 };
 export const HOSTILE_SITES = ['turban', 'sishui', 'hulao', 'meiwu', 'baima', 'yanjin', 'wuchao', 'changban', 'chibi'];
+// ---- 前哨營：每個頭目據點前方的友軍營區（存檔、重生、營火、水井），隨主線推進才出現 ----
+const OUTPOST_FOR = [['turban', '黃巾', 1], ['sishui', '汜水', 2], ['hulao', '虎牢', 3], ['meiwu', '郿塢', 4, -Math.PI / 2], ['baima', '白馬', 5], ['wuchao', '烏巢', 6], ['changban', '長坂', 7, Math.PI * 0.25], ['chibi', '赤壁', 8]];
+for (const [id, nm, stage, ang] of OUTPOST_FOR) {
+  const s = SITES[id], a0 = ang ?? Math.atan2(SITES.camp.z - s.z, SITES.camp.x - s.x);
+  let pick = null;
+  search: for (const dd of [40, 50, 62, 76, 90]) for (const da of [0, 0.35, -0.35, 0.7, -0.7, 1.05, -1.05, 1.4, -1.4, 1.8, -1.8]) {
+    const a = a0 + da, x = s.x + Math.cos(a) * (s.r + dd), z = s.z + Math.sin(a) * (s.r + dd), h = baseHeight(x, z);
+    if (h < 1.5 || h > 22 || Math.abs(x - riverX(z)) < 36 || Math.max(Math.abs(x), Math.abs(z)) > 395) continue;
+    for (const k in SITES) { const o = SITES[k]; if (dist2(x, z, o.x, o.z) < o.r + 40) continue search; }
+    pick = [x, z]; break;
+  }
+  if (pick) SITES['op_' + id] = { x: pick[0], z: pick[1], r: 11, name: nm + '前哨', outpost: true, stage };
+}
+// 地圖上只顯示已解鎖的前哨營
+export const siteVisible = id => !SITES[id].outpost || G.stage >= SITES[id].stage;
+export const outposts = () => Object.keys(SITES).filter(k => SITES[k].outpost);
 
 export function riverX(z) { return 150 + 45 * Math.sin(z / 110) + 20 * Math.sin(z / 37); }
 function baseHeight(x, z) {
@@ -490,6 +506,37 @@ export function damageTargets(x, z, radius, amount) {
 }
 function target(kind, id, mesh, x, z, r, hp, fy) { world.targets.push({ kind, id, mesh, x, z, y: heightAt(x, z), r, hp, max: hp, fy, burned: false }); }
 
+// ---- 前哨營（解鎖時才搭建） ----
+const builtOp = new Set();
+export function syncOutposts() {
+  const scene = G.scene, out = [];
+  for (const id of outposts()) {
+    const s = SITES[id];
+    if (builtOp.has(id) || G.stage < s.stage) continue;
+    builtOp.add(id); out.push(id);
+    const cx = s.x, cz = s.z, ga = Math.atan2(SITES.camp.z - cz, SITES.camp.x - cx);
+    tent(scene, cx + Math.cos(ga + 1.6) * 6, cz + Math.sin(ga + 1.6) * 6, 0x2f6b3a, 0.9, -ga);
+    tent(scene, cx + Math.cos(ga - 1.6) * 6, cz + Math.sin(ga - 1.6) * 6, 0xb8a888, 0.85, -ga + PI);
+    flag(scene, cx + Math.cos(ga + PI) * 4, cz + Math.sin(ga + PI) * 4, '劉', '#1f6b35', '#f4e8b0', 7);
+    campfire(scene, cx, cz);
+    const wx = cx + Math.cos(ga) * 5, wz = cz + Math.sin(ga) * 5, wy = heightAt(wx, wz);
+    addStatic(scene, [cyl(0.8, 0.9, 0.8, 10, 0x8a867e, 0, 0.4, 0), cyl(0.65, 0.65, 0.1, 10, 0x2a5a7a, 0, 0.72, 0)], wx, wy, wz);
+    world.addCircle(wx, wz, 1, 1); world.addNode({ kind: 'well', x: wx, z: wz, stock: 1 });
+    // 軍帳前的令旗台：存檔、傳送
+    const tx = cx + Math.cos(ga + PI * 0.5) * 2.4, tz = cz + Math.sin(ga + PI * 0.5) * 2.4, ty = heightAt(tx, tz);
+    addStatic(scene, [bx(1.4, 0.8, 0.8, 0x5a3a1c, 0, 0.4, 0), bx(0.5, 0.06, 0.4, 0xe8dcc0, 0, 0.83, 0), cyl(0.03, 0.03, 1.4, 4, 0x3a2a1a, 0.5, 1.5, 0), bx(0.4, 0.3, 0.02, 0xc8201a, 0.7, 2.0, 0)], tx, ty, tz, -ga);
+    world.addCircle(tx, tz, 0.8, 1); world.addNode({ kind: 'outpost', id, x: tx, z: tz, stock: 1 });
+    world.spots[id] = [cx, cz];
+  }
+  return out; // 新搭建的前哨營（讓 main 派駐守衛）
+}
+// 傳送門旁的儀器：擊敗董卓前是暗的
+export function setDeviceActive(on) {
+  if (!world.device) return;
+  world.device.screen.material.color.set(on ? 0x40d8ff : 0x1a2228);
+  world.device.light.visible = on && !G.touch;
+}
+
 // ---- 新章節據點 ----
 function enemyCamp(scene, id, tentColor, chars, flagBg) {
   const s = SITES[id], cx = s.x, cz = s.z, ga = Math.atan2(SITES.camp.z - cz, SITES.camp.x - cx);
@@ -625,6 +672,15 @@ function buildSites(scene) {
     addStatic(scene, [bx(1.3, 0.8, 0.8, 0x3a4a2a, 0, 0.4, 0), bx(1.34, 0.08, 0.84, 0x2a3a1a, 0, 0.82, 0), bx(0.5, 0.25, 0.02, 0xd8d8d0, 0, 0.45, 0.41)], s.x + 3, y, s.z - 3, 0.4);
     world.addCircle(s.x + 3, s.z - 3, 0.8, 1);
     world.addNode({ kind: 'crate', x: s.x + 3, z: s.z - 3, stock: 1 });
+    // 傳送門儀器（半埋在土裡的現代控制台）
+    const dx = s.x - 8.4, dz = s.z - 1.4, dy = heightAt(dx, dz);
+    addStatic(scene, [bx(1.2, 1.0, 0.8, 0x4a4e58, 0, 0.5, 0), bx(1.3, 0.12, 0.9, 0x2a2c32, 0, 1.06, 0), bx(1.1, 0.5, 0.1, 0x2a2c32, 0, 1.35, -0.3, -0.5), cyl(0.05, 0.05, 2.2, 5, 0x1a1a1a, 0.7, 0.2, 0.6, 0, 0, PI / 2.4), bx(0.3, 0.3, 0.3, 0x6a6e78, -0.6, 0.15, 0.5)], dx, dy, dz, 0.6);
+    const holder = new THREE.Object3D(); holder.position.set(dx, dy, dz); holder.rotation.y = 0.6; scene.add(holder);
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.36), new THREE.MeshBasicMaterial({ color: 0x1a2228 }));
+    screen.position.set(0, 1.37, -0.235); screen.rotation.x = -0.5; holder.add(screen);
+    const dl = new THREE.PointLight(0x40d8ff, 12, 8); dl.position.set(0, 1.9, 0.4); dl.visible = false; holder.add(dl);
+    world.device = { screen, light: dl, x: dx, z: dz };
+    world.addCircle(dx, dz, 0.9, 1.4); world.addNode({ kind: 'device', x: dx, z: dz + 0.6, stock: 1 });
   }
 
   // == 劉備軍營 ==
@@ -662,6 +718,9 @@ function buildSites(scene) {
     for (const [a, b] of [[-4, -2], [4, -2], [-4, 2], [4, 2], [0, -2], [0, 2]]) hp.push(cyl(0.12, 0.12, 3, 5, 0x5a4028, a, 1.5, b));
     hp.push(bx(9, 0.2, 5.2, 0x6a5a3a, 0, 3.1, 0, 0.08)); hp.push(bx(8, 0.12, 0.12, 0x5a4028, 0, 1.1, -2));
     addStatic(scene, hp, hx, hy, hz);
+    world.addNode({ kind: 'station', id: 'camp', x: cx + 14, z: cz - 9, stock: 1 });
+    addStatic(scene, [bx(1.4, 0.8, 0.8, 0x5a3a1c, 0, 0.4, 0), bx(0.5, 0.06, 0.4, 0xe8dcc0, 0, 0.83, 0), cyl(0.03, 0.03, 1.4, 4, 0x3a2a1a, 0.5, 1.5, 0), bx(0.4, 0.3, 0.02, 0x1f6b35, 0.7, 2.0, 0)], cx + 14, heightAt(cx + 14, cz - 9), cz - 9);
+    world.addCircle(cx + 14, cz - 9, 0.8, 1);
     Object.assign(sp, {
       liubei: [cx + 2, cz + 13], guanyu: [cx - 3, cz + 12], zhangfei: [cx + 7, cz + 12], zhaoyun: [cx + 12, cz + 4],
       mizhu: [mx, mz - 1.6], stable: [hx, hz], respawn: [cx + 18, cz - 6], campGate: [gx, gz],
@@ -691,6 +750,9 @@ function buildSites(scene) {
     flag(scene, cx - 5, cz - 6, '曹', '#2a3f8a', '#f4e8b0', 8); flag(scene, cx + 6, cz - 6, '孫', '#a82a20', '#f4e8b0', 8);
     for (const [dx, dz, ry] of [[-18, 4, 1.4], [18, 5, -1.4], [-12, 16, 2.2], [12, 17, -2.2]]) tent(scene, cx + dx, cz + dz, 0xb8a888, 1, ry);
     tower(scene, cx + 20, cz - 18);
+    world.addNode({ kind: 'station', id: 'coalition', x: cx + 4, z: cz + 8, stock: 1 });
+    addStatic(scene, [bx(1.4, 0.8, 0.8, 0x5a3a1c, 0, 0.4, 0), bx(0.5, 0.06, 0.4, 0xe8dcc0, 0, 0.83, 0)], cx + 4, heightAt(cx + 4, cz + 8), cz + 8);
+    world.addCircle(cx + 4, cz + 8, 0.8, 1);
     Object.assign(sp, { caocao: [cx - 6, cz - 4], sunjian: [cx + 6, cz - 4], coHorse: [cx - 18, cz - 8] });
   }
 

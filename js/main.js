@@ -14,6 +14,10 @@ import { spawnRecruit, giveAttendant, reslot, followers, cycleCommand } from './
 import { syncChapters, updateChapters, restoreBurned, spawnEnemy } from './chapters.js';
 import { BM, loadBM, ending } from './blackmarket.js';
 import { playIntro, updateIntro, skipIntro } from './intro.js';
+import { syncOutposts, setDeviceActive, outposts, siteVisible } from './world.js';
+import { spawnAkai, updateAkai, AK, akai, joined, addBond } from './akai.js';
+import { openHub, openDevice, openMail, updateMail, updateWind, onStageDevice, deviceStatus, homeEnding } from './device.js';
+import { playLvbuDeath, playGoHome, updateStory, skipStory } from './story.js';
 import { rnd, rndInt, pick, dist2 } from './util.js';
 
 const PI = Math.PI, KEY = 'sanguo-arms-dealer-save-v1';
@@ -96,7 +100,12 @@ function start(save) {
   if (G.flags.crate) for (const n of world.nodeList) if (n.kind === 'crate') n.stock = 0;
   if (G.flags.redHare && !(save && save.p.horse === 'red')) G.spawnRedHare();
   if (save) loadBM(save.bm);
-  restoreBurned(); syncChapters();
+  restoreBurned(); syncChapters(); outpostGuards(syncOutposts());
+  if (G.flags.deviceOn) setDeviceActive(true);
+  if (G.flags.akai && G.flags.akai.arrived) { // 還原阿凱：已同行就在身邊，否則在傳送門前等你
+    const pr = world.portal.position, a = G.flags.akai;
+    if (a.joined && !a.wait) spawnAkai(P.pos.x + 2, P.pos.z + 2); else spawnAkai(pr.x + 0.5, pr.z + 2.5);
+  }
   started = true; G.started = true; showRotateHint(G.touch && innerWidth < innerHeight);
   document.getElementById('hud').classList.remove('hidden');
   if (G.touch) document.getElementById('touch').classList.remove('hidden');
@@ -194,7 +203,14 @@ const UNLOCK_MSG = {
   lvbu: '劉備願意親自隨你出征——到軍營招攬他吧！',
   yanliang: '（演義中顏良是關羽在白馬陣前所斬——這回換你立了頭功。）',
 };
+function outpostGuards(ids, n = 2) { // 前哨營派兩名守衛（黎明時補足陣亡的守衛）
+  for (const id of ids) {
+    const [cx, cz] = world.spots[id], have = G.actors.filter(a => a.alive && a.outpost === id).length;
+    for (const k of [-1, 1].slice(0, Math.max(0, n - have))) { const g = new Actor('ally_soldier', cx + k * 3, cz + 4); g.outpost = id; g.homeYaw = g.yaw = Math.atan2(SITES.camp.x - cx, SITES.camp.z - cz) + PI; }
+  }
+}
 G.onKill = (a) => {
+  if (a.id === 'lvbu' && !AK().arrived) setTimeout(() => playLvbuDeath(a), 1400); // 呂布陣亡動畫 → 阿凱登場
   if (a.def.boss) {
     ui.msg(`${a.name} 已被擊敗！`, 'quest'); audio.play('horn', 0.8); checkQuest();
     if (UNLOCK_MSG[a.id]) setTimeout(() => ui.msg('🔓 ' + UNLOCK_MSG[a.id], 'quest'), 1800);
@@ -207,11 +223,18 @@ G.replayIntro = () => { ui.close(); playIntro(() => ui.msg('回到亂世。', 'i
 G.checkQuest = checkQuest;
 // 主線推進：生成新章節敵營；赤壁之後顯示結局
 G.onStage = done => {
-  syncChapters();
+  syncChapters(); outpostGuards(syncOutposts()); onStageDevice(done);
+  if (joined()) addBond(25, '一起完成主線');
+  if (done >= 0 && SITES['op_' + ['turban', 'sishui', 'hulao', 'meiwu', 'baima', 'wuchao', 'changban', 'chibi'][done]]) setTimeout(() => ui.msg('⛺ 下一個頭目據點前方設立了友軍前哨營，可在那裡存檔、重生。', 'info'), 5200);
   if (done === 4) setTimeout(() => ui.msg('董卓伏誅，然而天下並未太平——袁紹已在北方起兵。', 'quest'), 2500);
   if (done === 8) setTimeout(() => { const e = ending(); document.getElementById('win-title').textContent = e.title; document.getElementById('win-story').innerHTML = e.text; ui.open('win'); }, 3000);
 };
 G.openWorkshop = openWorkshop;
+G.openHub = openHub; G.openDevice = openDevice; G.openMail = openMail; G.deviceStatus = deviceStatus; G.skipStory = skipStory;
+G.goHome = () => playGoHome(() => {
+  const e = homeEnding(); document.getElementById('win-title').textContent = e.title; document.getElementById('win-story').innerHTML = e.text;
+  document.getElementById('btn-title').classList.remove('hidden'); document.querySelector('#menu-win [data-close]').textContent = '……睜開眼，原來還在亂世？（繼續遊玩）'; ui.open('win');
+});
 G.wsDeposit = depositFromAttendant;
 // 玩家倒下被救回營地：隨行部隊與侍從一起撤回
 G.onRespawn = () => {
@@ -250,8 +273,9 @@ function onDawn() {
     for (const m of c.members) if (m.actor && !m.actor.alive && !m.actor.def.boss) m.actor = spawnEnemy(m.id, m.x, m.z);
   }
   // 陣亡的友軍士卒補員
-  const sp = world.spots, allies = G.actors.filter(a => a.alive && a.id === 'ally_soldier').length;
+  const allies = G.actors.filter(a => a.alive && a.id === 'ally_soldier' && !a.outpost).length;
   for (let i = allies; i < 8; i++) new Actor('ally_soldier', SITES.camp.x + rnd(-15, 15), SITES.camp.z + rnd(-15, 10));
+  outpostGuards(outposts().filter(id => siteVisible(id) && world.spots[id]));
 }
 function director(dt) {
   const P = player, prev = G.time;
@@ -260,11 +284,12 @@ function director(dt) {
   const cross = t => prev < t && G.time >= t;
   if (cross(300)) { onDawn(); ui.msg(`第 ${G.day} 日，天亮了。`, 'info'); }
   if (cross(1170)) { ui.msg('夜幕降臨……狼群與賊兵開始出沒，回營地或生起戒心。', 'warn'); audio.play('wolf', 0.7); }
-  if (cross(1275) && G.stage >= 1) {
+  if (cross(1275) && G.stage >= 1 && !outposts().some(id => siteVisible(id) && dist2(P.pos.x, P.pos.z, SITES[id].x, SITES[id].z) < 45)) { // 前哨營是安全區，不會有夜襲
     const n = Math.min(3 + G.day, 9);
     if (spawnGroup(n, 55, 75, true)) { ui.msg('⚠ 號角聲響起——有賊兵趁夜來襲！', 'warn'); audio.play('horn'); }
   }
-  const nearCamp = dist2(P.pos.x, P.pos.z, SITES.camp.x, SITES.camp.z) < 90 || dist2(P.pos.x, P.pos.z, SITES.coalition.x, SITES.coalition.z) < 70 || dist2(P.pos.x, P.pos.z, 0, 0) < 45 && G.stage === 0;
+  const nearOutpost = outposts().some(id => siteVisible(id) && dist2(P.pos.x, P.pos.z, SITES[id].x, SITES[id].z) < 45);
+  const nearCamp = nearOutpost || dist2(P.pos.x, P.pos.z, SITES.camp.x, SITES.camp.z) < 90 || dist2(P.pos.x, P.pos.z, SITES.coalition.x, SITES.coalition.z) < 70 || dist2(P.pos.x, P.pos.z, 0, 0) < 45 && G.stage === 0;
   timers.patrol -= dt;
   if (timers.patrol <= 0) {
     timers.patrol = rnd(55, 95);
@@ -283,7 +308,11 @@ function director(dt) {
   if (timers.deer <= 0) { timers.deer = 30; if (G.animals.filter(a => a.alive && a.kind === 'deer').length < 12) spawnDeer(true); }
   timers.sec -= dt;
   if (timers.sec <= 0) {
-    timers.sec = 1; checkQuest(); checkOrders();
+    timers.sec = 1; checkQuest(); checkOrders(); updateMail();
+    for (const id of outposts()) { // 抵達前哨營即設為重生點
+      if (!siteVisible(id) || G.flags.respawnAt === id) continue;
+      if (dist2(P.pos.x, P.pos.z, SITES[id].x, SITES[id].z) < 14) { G.flags.respawnAt = id; ui.msg(`⛺ 抵達${SITES[id].name}，戰死將在此重生（令旗台可存檔、傳送）。`, 'info'); G.save(); }
+    }
     for (const a of G.actors) if (a.roam && a.alive && !a.target && dist2(a.pos.x, a.pos.z, P.pos.x, P.pos.z) > 280) { G.scene.remove(a.m.root); a.gone = true; a.alive = false; }
     G.actors = G.actors.filter(a => !a.gone); G.animals = G.animals.filter(a => !a.gone);
   }
@@ -420,12 +449,15 @@ function frame(t) {
     for (const a of G.actors) a.update(dt);
     for (const a of G.animals) a.update(dt);
     for (const a of G.attendants) a.update(dt);
+    updateAkai(dt); updateWind(dt);
     separate();
     checkArena(dt);
     updateProjectiles(dt); updatePickups(dt); updateEffects(dt); updateNodes(dt); updateMines(dt);
     updateSky(dt, cam.position);
     ui.update(dt);
     adaptResolution(t);
+  } else if (G.menu === 'story') {
+    updateStory(dt);
   } else if (G.menu === 'intro') {
     updateIntro(dt);
   } else if (G.menu === 'cutscene') {

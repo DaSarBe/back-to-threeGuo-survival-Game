@@ -11,6 +11,7 @@ export const ITEMS = {
   wetPowder: { n: '受潮火藥', i: '🌫️' },
   oilcloth: { n: '油布包', i: '👝', key: true },
   baojia: { n: '河北寶甲', i: '🥋', key: true, armor: 0.55 },
+  parts: { n: '現代零件', i: '⚙️' },
   berry: { n: '野果', i: '🍒', food: 12, water: 6 },
   meat: { n: '生肉', i: '🥩', food: 14, hp: -6 },
   cooked: { n: '烤肉', i: '🍖', food: 42 },
@@ -27,7 +28,7 @@ export const ITEMS = {
 
 // 快捷列順序
 // 快捷列只顯示已擁有的兵器，數字鍵依序對應
-export const HOTBAR = ['pistol', 'dao', 'spear', 'bow', 'shotgun', 'rifle', 'ji', 'guandao', 'staff', 'qixing', 'qinggang', 'yitian', 'tbow'];
+export const HOTBAR = ['pistol', 'dao', 'spear', 'bow', 'shotgun', 'rifle', 'smg', 'ji', 'guandao', 'staff', 'qixing', 'qinggang', 'yitian', 'tbow'];
 export const WEAPONS = {
   pistol: { n: '手槍', i: '🔫', type: 'gun', dmg: 34, mag: 12, rate: 0.17, reload: 1.3, spread: 0.012, range: 160, ammo: null, kick: 0.035, fov: 55 },
   dao: { n: '環首刀', i: '🗡️', type: 'melee', dmg: 48, reach: 2.7, rate: 0.5 },
@@ -43,6 +44,8 @@ export const WEAPONS = {
   qinggang: { n: '青釭劍', i: '💠', type: 'melee', dmg: 115, reach: 2.8, rate: 0.42 },
   yitian: { n: '倚天劍', i: '⚜️', type: 'melee', dmg: 125, reach: 2.8, rate: 0.45 },
   tbow: { n: '鐵胎弓', i: '🎯', type: 'bow', dmg: 110, rate: 0.7, ammo: 'arrow' },
+  // ---- 阿凱設計的連發槍（羈絆 Lv5 解鎖） ----
+  smg: { n: '凱式連發槍', i: '⚙️', type: 'gun', dmg: 24, mag: 30, rate: 0.09, reload: 2.0, spread: 0.022, range: 140, ammo: 'rifleAmmo', kick: 0.02, fov: 58 },
 };
 
 export const RECIPES = [
@@ -57,6 +60,7 @@ export const RECIPES = [
   { id: 'drypowder', n: '烘乾火藥', d: '須在營火旁', near: 'fire', need: { wetPowder: 2, wood: 1 }, give: { powder: 2 } },
   { id: 'oilcloth', n: '油布包', d: '獸油浸布，大幅減緩火藥受潮', once: 'oilcloth', need: { meat: 3, herb: 2 }, give: { oilcloth: 1 } },
   { id: 'cooked', n: '烤肉', d: '熟食更能充飢', need: { meat: 1, wood: 1 }, give: { cooked: 1 } },
+  { id: 'smg', n: '凱式連發槍', d: '阿凱設計的連發火器，按住扳機連射', req: 'akai5', need: { parts: 3, iron: 10, powder: 6 }, weapon: 'smg', bonus: { rifleAmmo: 30 } },
   { id: 'firebomb', n: '燃燒彈 ×2', d: '獸油火罐，落地起火燒一片（雨天燒得短）', need: { powder: 1, meat: 1, wood: 1 }, give: { firebomb: 2 } },
   { id: 'mine', n: '地雷', d: '埋在地上，敵人踩到就爆炸', need: { powder: 2, iron: 2 }, give: { mine: 1 } },
   { id: 'medicine', n: '金瘡藥', d: '按 H 使用，恢復生命', need: { herb: 2 }, give: { medicine: 1 } },

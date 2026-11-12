@@ -1,6 +1,7 @@
 // 天下輿圖：地形底圖、據點、任務目標、隊伍與附近敵兵；可拖曳平移、縮放
 import { G } from './state.js';
-import { SITES, HALF, HOSTILE_SITES, heightAt, inSite } from './world.js';
+import { SITES, HALF, HOSTILE_SITES, heightAt, inSite, siteVisible, world } from './world.js';
+import { scanRange } from './akai.js';
 import { QUESTS, questSite } from './quests.js';
 import { allBurned } from './chapters.js';
 
@@ -52,7 +53,18 @@ export function drawMap(canvas, v, t = 0) {
   const fs = Math.max(11, Math.min(18, 11 + v.zoom * 2)) * dpr;
   const q = QUESTS[G.stage], qs = questSite(q);
   // 據點
+  // 地脈探測（傳送門儀器）：礦點、草藥
+  const scan = G.flags.deviceOn && G.stage >= 6;
+  if (scan) {
+    const NC = { iron: '#c87a4a', saltpeter: '#f4f4f0', sulfur: '#f0d830', herb: '#c080e8' };
+    for (const n of world.nodeList) {
+      if (!NC[n.item] || n.stock <= 0) continue;
+      const x = X(n.x), z = Z(n.z); if (x < 0 || z < 0 || x > S || z > S) continue;
+      g.fillStyle = NC[n.item]; g.fillRect(x - 2.2 * dpr, z - 2.2 * dpr, 4.4 * dpr, 4.4 * dpr);
+    }
+  }
   for (const id in SITES) {
+    if (!siteVisible(id)) continue;
     const s = SITES[id], x = X(s.x), z = Z(s.z), r = Math.max(6 * dpr, s.r * k);
     const hostile = HOSTILE_SITES.includes(id), done = hostile && cleared(id);
     const col = id === 'blackmarket' ? '#b070e0' : id === 'workshop' ? '#e0a040' : !hostile ? '#5ac86a' : done ? '#9a9a8a' : '#e0503a';
@@ -62,7 +74,7 @@ export function drawMap(canvas, v, t = 0) {
       const pr = r + (8 + 4 * Math.sin(t * 4)) * dpr;
       g.strokeStyle = '#ffd24a'; g.lineWidth = 3 * dpr; g.beginPath(); g.arc(x, z, pr, 0, 7); g.stroke();
     }
-    const mark = hostile ? (done ? '✔' : '⚔') : id === 'workshop' ? '🏭' : id === 'blackmarket' ? '◆' : id === 'spawn' ? '✧' : '⛺';
+    const mark = s.outpost ? '⛺' : hostile ? (done ? '✔' : '⚔') : id === 'workshop' ? '🏭' : id === 'blackmarket' ? '◆' : id === 'spawn' ? '✧' : '⛺';
     g.font = `bold ${fs}px "Noto Serif TC","PMingLiU","Microsoft JhengHei",serif`; g.textAlign = 'center'; g.textBaseline = 'bottom';
     g.lineWidth = 4 * dpr; g.strokeStyle = 'rgba(0,0,0,.75)';
     const label = `${mark} ${s.name}`;
@@ -72,11 +84,12 @@ export function drawMap(canvas, v, t = 0) {
   const dot = (o, col, rad) => { const x = X(o.pos.x), z = Z(o.pos.z); if (x < -10 || z < -10 || x > S + 10 || z > S + 10) return; g.fillStyle = col; g.beginPath(); g.arc(x, z, rad * dpr, 0, 7); g.fill(); g.strokeStyle = 'rgba(0,0,0,.6)'; g.lineWidth = 1 * dpr; g.stroke(); };
   for (const a of G.actors) {
     if (!a.alive) continue;
-    const near = Math.hypot(a.pos.x - P.pos.x, a.pos.z - P.pos.z) < 110;
+    const dd = Math.hypot(a.pos.x - P.pos.x, a.pos.z - P.pos.z), near = dd < scanRange();
     if (a.follow) dot(a, '#7af08a', a.def.general ? 4.5 : 3.2);
-    else if (a.faction === 'enemy' && near) dot(a, a.def.boss ? '#ff2a1a' : '#e8553a', a.def.boss ? 5 : 3);
+    else if (a.faction === 'enemy' && (near || (scan && a.id === 'en_gun' && dd < 400))) dot(a, a.id === 'en_gun' ? '#ff40c0' : a.def.boss ? '#ff2a1a' : '#e8553a', a.def.boss ? 5 : 3);
   }
   for (const a of G.attendants) dot(a, '#ffe08a', 3.5);
+  if (G.flags.akai && G.flags.akai.arrived && G.akaiRef) dot(G.akaiRef, '#7ae0ff', 3.8);
   if (P.horse && !P.mount) dot(P.horse, '#d4a050', 4);
   // 玩家箭頭
   g.save(); g.translate(X(P.pos.x), Z(P.pos.z)); g.rotate(-P.yaw); g.scale(dpr, dpr);

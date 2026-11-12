@@ -5,6 +5,7 @@ import { SITES, buildWorkshop } from './world.js';
 import { audio } from './audio.js';
 import { costText, canPay, pay } from './squad.js';
 import { price } from './orders.js';
+import { hasBond } from './akai.js';
 
 export const WS = G.ws = { built: false, lv: { mill: 0, forge: 0, store: 0 }, store: {}, product: 'shell', t: WS_CYCLE, made: {}, msgT: -999, idleT: -999 };
 export function loadWorkshop(o) {
@@ -58,7 +59,7 @@ function produce() {
       const ok = Object.entries(r.need).every(([k, q]) => has(k, q));
       const gain = Object.values(r.give).reduce((a, b) => a + b, 0) - Object.values(r.need).reduce((a, b) => a + b, 0);
       if (!ok || !room(Math.max(0, gain))) break;
-      for (const [k, q] of Object.entries(r.need)) take(k, q);
+      if (!(hasBond(5) && Math.random() < 0.2)) for (const [k, q] of Object.entries(r.need)) take(k, q); // 阿凱羈絆 Lv5：兩成機率不耗原料
       for (const [k, q] of Object.entries(r.give)) { add(k, q); made[k] = (made[k] || 0) + q; }
       did++;
     }

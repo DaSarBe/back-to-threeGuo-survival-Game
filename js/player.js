@@ -7,6 +7,7 @@ import { audio } from './audio.js';
 import { spawnArrow, spawnGrenade, placeMine, alertEnemies, fxTracer, fxBurst, spawnLightning } from './entities.js';
 import { clamp, lerp, rnd, turnTo, dist2 } from './util.js';
 import { misfireChance, dudChance } from './weather.js';
+import { akai, joined, tryRescue, regenMul } from './akai.js';
 
 const PI = Math.PI;
 const keys = {}, mouse = { l: false, r: false };
@@ -49,13 +50,15 @@ export const player = {
     if (!this.alive || G.menu) return;
     n *= (1 - this.armor); this.hp -= n; this.hurtT = 6;
     G.ui.hurt(n); audio.play('hurt', 0.8); if (G.touch && navigator.vibrate) { try { navigator.vibrate(25); } catch (e) { } } this.shake = Math.max(this.shake, 0.12);
+    if (this.hp <= 0 && tryRescue()) { this.hp = 30; this.hurtT = 2; this.shake = 0.3; return; } // 阿凱羈絆 Lv4：緊急救援
     if (this.hp <= 0) {
       this.hp = 0; this.alive = false; if (this.mount) this.dismount();
       G.ui.deathBy(src && src.name ? src.name : null);
     }
   },
   respawn() {
-    const sp = G.stage >= 1 ? world.spots.respawn : [SITES.spawn.x, SITES.spawn.z];
+    const r = G.flags.respawnAt, op = r && r !== 'camp' && r !== 'coalition' && world.spots[r];
+    const sp = op ? [op[0] + 2, op[1] + 2] : r === 'coalition' ? [SITES.coalition.x + 4, SITES.coalition.z + 11] : G.stage >= 1 ? world.spots.respawn : [SITES.spawn.x, SITES.spawn.z];
     this.pos.set(sp[0], heightAt(sp[0], sp[1]), sp[1]);
     this.alive = true; this.hp = 70; this.hunger = Math.max(this.hunger, 50); this.thirst = Math.max(this.thirst, 50);
     const lost = Math.floor(this.count('coin') * 0.3); if (lost) this.inv.coin -= lost;
@@ -222,9 +225,13 @@ function findInteract() {
     const s = d + (1 - dot) * 3; if (s < bs) { bs = s; best = { label, act }; }
   };
   for (const a of G.actors) if (a.alive && ((a.def.general && a.faction === 'ally') || a.def.talk)) consider(a.pos.x, a.pos.z, 3.6, `與 ${a.name} 交談`, () => G.ui.talk(a));
+  { const k = akai(); if (k) consider(k.pos.x, k.pos.z, 3.4, joined() ? '與阿凱交談' : '與穿越者交談', () => G.ui.talk(k)); }
   for (const a of G.attendants) consider(a.pos.x, a.pos.z, 3.2, `與侍從 ${a.name} 交談` + (a.carried ? `（帶著 ${a.carried} 件）` : ''), () => G.ui.talk(a));
   for (const h of G.animals) if (h.kind === 'horse' && h.alive) consider(h.pos.x, h.pos.z, 3.4, h.tamed ? `騎乘 ${h.name}` : `馴服並騎乘 ${h.name}`, () => P.mountHorse(h));
   world.nodes.query(P.pos.x, P.pos.z, 7, n => {
+    if (n.kind === 'outpost' || n.kind === 'station') return consider(n.x, n.z, 3.4, '令旗台：存檔／重生點' + (G.flags.deviceOn && G.stage >= 5 ? '／傳送' : ''), () => G.openHub(n.id));
+    if (n.kind === 'device') return consider(n.x, n.z, 3.2, G.flags.deviceOn ? '使用傳送門儀器' : '查看奇怪的儀器', () => G.openDevice());
+    if (n.kind === 'mail') { if (n.stock > 0 && G.flags.device && G.flags.device.mail) consider(n.x, n.z, 2.8, '打開時空郵包', () => G.openMail(n)); return; }
     if (n.kind === 'workshop') return consider(n.x, n.z, 8, G.ws.built ? '管理軍火工坊' : '查看工坊預定地', () => G.openWorkshop());
     if (n.kind === 'tree') consider(n.x, n.z, n.bamboo ? 5 : 2.6, n.bamboo ? '砍伐竹子' : '砍伐樹木', () => gather(n));
     else if (n.kind === 'crate') { if (n.stock > 0) consider(n.x, n.z, 3, '打開軍火箱', () => G.openCrate(n)); }
@@ -313,7 +320,7 @@ export function updatePlayer(dt) {
   const drain = P.sprinting && !P.mount ? 1.6 : 1;
   P.hunger = Math.max(0, P.hunger - dt * 100 / 840 * drain); P.thirst = Math.max(0, P.thirst - dt * 100 / 600 * drain);
   if (P.hunger <= 0 || P.thirst <= 0) { P.hp -= dt * 1.4; if (P.hp <= 0) { P.hp = 0; P.alive = false; if (P.mount) P.dismount(); G.ui.deathBy(P.thirst <= 0 ? '乾渴' : '飢餓'); return; } }
-  else if (P.hurtT <= 0 && P.hp < P.maxHp && P.hunger > 35 && P.thirst > 35) P.hp = Math.min(P.maxHp, P.hp + dt * 1.3);
+  else if (P.hurtT <= 0 && P.hp < P.maxHp && P.hunger > 35 && P.thirst > 35) P.hp = Math.min(P.maxHp, P.hp + dt * 1.3 * regenMul());
 
   // ---- 武器 ----
   const w = P.wstat(P.cur);
@@ -392,6 +399,7 @@ export function initInput(canvas) {
   canvas.addEventListener('mousedown', e => {
     if (G.menu === 'cutscene') { G.skipCutscene(); return; }
     if (G.menu === 'intro') { G.skipIntro(); if (!G.touch && !G.noLock) lock(); return; } // 點擊跳過開場，並趁這次點擊鎖定滑鼠
+    if (G.menu === 'story') { G.skipStory(); if (!G.touch && !G.noLock) lock(); return; } // 點擊跳過劇情動畫
     if (G.menu) return;
     audio.init();
     if (!G.noLock && !G.touch && document.pointerLockElement !== canvas) { lock(); return; }
@@ -404,6 +412,7 @@ export function initInput(canvas) {
     if (e.code === 'Tab') e.preventDefault();
     if (G.menu === 'cutscene') { if (!e.repeat) G.skipCutscene(); return; }
     if (G.menu === 'intro') { if (!e.repeat) G.skipIntro(); return; }
+    if (G.menu === 'story') { if (!e.repeat) G.skipStory(); return; }
     if (G.menu) {
       if ((e.code === 'Escape' || e.code === 'Tab' || e.code === 'KeyC' || (e.code === 'KeyM' && G.menu === 'map')) && !e.repeat) G.ui.escape();
       return;
@@ -421,6 +430,7 @@ export function initInput(canvas) {
   const tstart = e => {
     if (G.menu === 'cutscene') { G.skipCutscene(); e.preventDefault(); return; }
     if (G.menu === 'intro') { G.skipIntro(); e.preventDefault(); return; }
+    if (G.menu === 'story') { G.skipStory(); e.preventDefault(); return; }
     if (G.menu) return; audio.init();
     for (const t of e.changedTouches) {
       const sl = t.target.closest && t.target.closest('[data-slot]');
