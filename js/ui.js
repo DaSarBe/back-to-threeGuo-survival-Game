@@ -24,7 +24,7 @@ import { rank, nextRank, merit, callYou } from './ranks.js';
 const $ = id => document.getElementById(id);
 const el = {};
 let hitT = 0, mapT = 0, last = {}, bossRef = null;
-const MENUS = ['start', 'pause', 'inv', 'dialog', 'shop', 'dead', 'win', 'settings', 'workshop', 'map'];
+const MENUS = ['start', 'pause', 'inv', 'dialog', 'shop', 'dead', 'win', 'settings', 'workshop', 'map', 'slots'];
 
 export const ui = {
   dirty: true,
@@ -35,7 +35,7 @@ export const ui = {
     document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => ui.tab(b.dataset.tab));
     $('btn-respawn').onclick = () => { G.player.respawn(); ui.close(); };
     $('btn-music').onclick = () => ui.msg(audio.toggleMusic() ? '配樂：開' : '配樂：關', 'info');
-    $('btn-save').onclick = () => { G.save(); ui.msg('已存檔。', 'info'); };
+    $('btn-save').onclick = () => { if (G.save({ now: true })) ui.msg(`已存檔到「存檔 ${G.slot}」${G.cloudOn && G.cloudOn() ? '，並同步雲端' : ''}。`, 'info'); else ui.msg('目前無法存檔。', 'warn'); };
     $('btn-intro').onclick = () => G.replayIntro();
     $('btn-tutor').onclick = () => { toggleTutorial(); ui.close(); };
     this.renderDiff();
@@ -57,14 +57,14 @@ export const ui = {
     for (const m of MENUS) $('menu-' + m).classList.toggle('hidden', m !== name);
     G.menu = name; resetInput(); G.unlockPointer && G.unlockPointer(); document.body.classList.add('menu-open');
     if (name === 'inv') this.tab(this.curTab || 'craft');
-    if (name === 'pause') syncButton();
+    if (name === 'pause') { syncButton(); G.pauseLine && G.pauseLine(); }
     if (name === 'shop') this.renderShop();
   },
   close() {
     for (const m of MENUS) $('menu-' + m).classList.add('hidden');
     G.menu = null; G.lockPointer && G.lockPointer(); document.body.classList.remove('menu-open');
   },
-  escape() { if (G.menu === 'rite') G.riteNext(); else if (G.menu === 'layout') G.cancelLayout(); else if (G.menu === 'settings') this.closeSettings(); else if (['pause', 'inv', 'shop', 'dialog', 'win', 'workshop', 'map'].includes(G.menu)) this.close(); },
+  escape() { if (G.menu === 'rite') G.riteNext(); else if (G.menu === 'slots') G.slotsBack(); else if (G.menu === 'layout') G.cancelLayout(); else if (G.menu === 'settings') this.closeSettings(); else if (['pause', 'inv', 'shop', 'dialog', 'win', 'workshop', 'map'].includes(G.menu)) this.close(); },
   openMap() { openMap(); },
   // 直向：快捷鍵太多時先縮小、縮窄間距讓它們排成一排；真的排不下才換行，並把右側按鍵往上讓
   fitQuick() {

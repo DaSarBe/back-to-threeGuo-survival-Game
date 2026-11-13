@@ -9,7 +9,7 @@ import { player, updatePlayer, initInput, resetInput } from './player.js';
 import { Actor, Animal, updateProjectiles, updatePickups, updateEffects, initFx, updateMines } from './entities.js';
 import { ui } from './ui.js';
 import { audio } from './audio.js';
-import { checkQuest } from './quests.js';
+import { checkQuest, QUESTS } from './quests.js';
 import { spawnRecruit, giveAttendant, reslot, followers, cycleCommand } from './squad.js';
 import { syncChapters, updateChapters, restoreBurned, spawnEnemy } from './chapters.js';
 import { BM, loadBM, ending } from './blackmarket.js';
@@ -18,7 +18,7 @@ import { syncOutposts, setDeviceActive, outposts, siteVisible } from './world.js
 import { spawnAkai, updateAkai, AK, akai, joined, addBond } from './akai.js';
 import { updateBarks, say } from './barks.js';
 import { initRites, updateRites, killCam, onStageRites, rite } from './rites.js';
-import { addMerit, noteKill, noteDeath, noteDuel, tickPlay, rank } from './ranks.js';
+import { addMerit, noteKill, noteDeath, noteDuel, tickPlay, rank, CHAPTERS } from './ranks.js';
 import { initLights, initFlashlight, updateLights } from './lights.js';
 import { commandSkill, updateSkills } from './skills.js';
 import { updateDefense, siegeHit, defenseActive } from './defense.js';
@@ -27,8 +27,10 @@ import { initLayout, applyLayout, openLayoutEditor, cancelLayout } from './layou
 import { openHub, openDevice, openMail, updateMail, updateWind, onStageDevice, deviceStatus, homeEnding } from './device.js';
 import { playLvbuDeath, playGoHome, updateStory, skipStory } from './story.js';
 import { rnd, rndInt, pick, dist2 } from './util.js';
+import * as SV from './saves.js';
+import { initSlots, openSlots } from './slots.js';
 
-const PI = Math.PI, KEY = 'sanguo-arms-dealer-save-v1';
+const PI = Math.PI;
 const canvas = document.getElementById('game');
 let lastT = 0, started = false, basePR = 1, resScale = 1, fpsN = 0, fpsT = 0, resHold = 0;
 const timers = { patrol: 40, wolf: 20, sec: 1, save: 45, deer: 10 };
@@ -60,11 +62,9 @@ function init() {
   };
   addEventListener('resize', resize); addEventListener('orientationchange', () => setTimeout(resize, 250)); resize();
 
-  let save = null;
-  try { save = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch (e) { }
-  const bc = document.getElementById('btn-continue');
-  if (save && save.v === 1) { bc.classList.remove('hidden'); bc.onclick = () => start(save); }
-  document.getElementById('btn-new').onclick = () => start(null);
+  SV.migrate(); initSlots(); // 存檔槽（舊版單一存檔自動搬到存檔 1）
+  document.getElementById('btn-new').onclick = () => { if (SV.anySaved()) openSlots('new', 'start'); else start(null, 1); }; // 全新玩家直接開在存檔 1
+  SV.initCloud(); // 在 claude.ai 頁面登入時自動連上雲端並同步
   document.getElementById('loading').textContent = G.touch ? '觸控模式：左半螢幕移動、右半螢幕轉動視角。建議橫向握持。' : '點擊按鈕後，滑鼠將被鎖定以控制視角。';
   requestAnimationFrame(frame);
 }
@@ -77,8 +77,9 @@ function showRotateHint(on) {
   if (on && started) hintTimer = setTimeout(() => h.classList.add('hidden'), 4000);
 }
 
-function start(save) {
+function start(save, slot) {
   audio.init();
+  G.slot = slot || SV.firstEmpty() || 1; // 之後的自動存檔都寫到這個槽
   if (G.touch) { // 手機：嘗試全螢幕並鎖定橫向（不支援的瀏覽器會自動略過）
     try {
       const el = document.documentElement, rf = el.requestFullscreen || el.webkitRequestFullscreen;
@@ -241,6 +242,7 @@ G.onKill = (a, src) => {
 G.cycleCommand = cycleCommand;
 G.skipIntro = skipIntro;
 // 暫停選單：重看開場動畫，看完回到遊戲
+G.startGame = start;
 G.replayIntro = () => { ui.close(); playIntro(() => ui.msg('回到亂世。', 'info')); };
 G.checkQuest = checkQuest;
 // 主線推進：生成新章節敵營；赤壁之後顯示結局
@@ -267,14 +269,25 @@ G.onRespawn = () => {
   for (const a of G.attendants) { if (a.ws) continue; a.wait = false; a.state = 'idle'; a.node = null; a.pos.set(P.pos.x + rnd(-2, 2), 0, P.pos.z + rnd(-2, 2)); }
   if (followers().length) ui.msg('隨行部隊護送你撤回了營地。', 'info');
 };
-G.save = () => {
-  const P = player; if (!started || !P.alive) return;
-  const d = { v: 1, stage: G.stage, killed: G.killed, day: G.day, time: G.time, flags: G.flags, p: { x: P.pos.x, z: P.pos.z, yaw: P.yaw, hp: P.hp, hunger: P.hunger, thirst: P.thirst, inv: P.inv, owned: P.owned, mags: P.mags, armor: P.armor, canteen: P.canteen, cur: P.cur, damp: Math.round(P.damp), upg: P.upg, horse: P.horse ? (P.horse.name === '赤兔馬' ? 'red' : 'yes') : null },
+// 存到目前的存檔槽（G.slot）。opts.now：立刻上傳雲端（手動存檔、返回標題、切到背景時）。回傳是否存成功
+G.save = opts => {
+  const P = player; if (!started || !P.alive || !G.slot) return false;
+  const q = QUESTS[G.stage], ch = CHAPTERS[Math.min(G.stage, CHAPTERS.length - 1)];
+  const d = { v: 1, ts: Date.now(), stage: G.stage, killed: G.killed, day: G.day, time: G.time, flags: G.flags, p: { x: P.pos.x, z: P.pos.z, yaw: P.yaw, hp: P.hp, hunger: P.hunger, thirst: P.thirst, inv: P.inv, owned: P.owned, mags: P.mags, armor: P.armor, canteen: P.canteen, cur: P.cur, damp: Math.round(P.damp), upg: P.upg, horse: P.horse ? (P.horse.name === '赤兔馬' ? 'red' : 'yes') : null },
     squad: followers().filter(a => a.recruited).map(a => [a.id, +(a.hp / a.maxHp).toFixed(2)]),
     gens: followers().filter(a => a.def.general).map(a => a.id),
     att: G.attendants.map(a => ({ spec: a.spec, inv: a.inv, focus: a.focus, wait: a.wait, waitPos: a.waitPos, ws: !!a.ws })),
-    cmd: G.squadCmd, orders: OR, ws: saveWorkshop(), bm: BM };
-  try { localStorage.setItem(KEY, JSON.stringify(d)); } catch (e) { }
+    cmd: G.squadCmd, orders: OR, ws: saveWorkshop(), bm: BM,
+    meta: { stage: G.stage, day: G.day, chap: ch ? ch.no : '', title: q ? q.t : '', rank: rank().n, play: Math.round((G.flags.rank && G.flags.rank.play) || 0), diff: G.flags.diff || '' } }; // meta：存檔槽畫面上的摘要
+  if (!SV.write(G.slot, d)) { if (!G.saveWarned) { G.saveWarned = true; ui.msg('存檔失敗：瀏覽器的儲存空間不足或被禁用。', 'warn'); } return false; }
+  SV.cloudSaved(G.slot, !!(opts && opts.now));
+  return true;
+};
+// 另存到指定的存檔槽，之後的自動存檔也寫到那裡
+G.saveTo = n => {
+  const prev = G.slot; G.slot = n;
+  if (!G.save({ now: true })) { G.slot = prev; ui.msg('目前無法存檔。', 'warn'); return false; }
+  ui.msg(`已存到「存檔 ${n}」。之後的自動存檔也會存在這裡。`, 'info'); G.pauseLine && G.pauseLine(); return true;
 };
 
 // ------------------------------------------------------------------ 導演：巡邏、夜襲、狼群、重生

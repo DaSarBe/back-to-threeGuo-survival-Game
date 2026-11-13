@@ -532,3 +532,31 @@ body.touch .decree .col.sign { font-size: 12.5px; } body.touch .decree .col { li
 body.touch #rite-kill .seal, body.touch #rite.stamped .seal.stamp, body.touch #rite.stamped .grade .seal { animation-name: stampInS; }
 @keyframes stampInS { 0% { opacity: 0; transform: rotate(-5deg) scale(1.7); } 100% { opacity: 1; transform: rotate(-5deg) scale(1); } }
 body.touch #rite-kill .kc { padding: 4px 40px; }
+
+/* ---------- 存檔槽與雲端存檔 ---------- */
+#slots-list { display: grid; gap: 10px; margin: 14px 0 6px; text-align: left; }
+.svslot { display: grid; grid-template-columns: 54px 1fr auto; gap: 12px; align-items: center; padding: 10px 14px; border: 1px solid var(--ui-line); border-radius: 10px; background: rgba(255,255,255,.035); }
+.svslot.cur { border-color: var(--ui-gold); background: rgba(230,190,88,.08); }
+.svslot .no { font-size: 30px; font-weight: 700; line-height: 1; color: var(--ui-gold); text-align: center; }
+.svslot .no small { display: block; margin-top: 5px; font-size: 11px; font-weight: normal; letter-spacing: .1em; color: var(--ui-dim); }
+.svslot.cur .no small { color: var(--ui-gold-hi); }
+.svslot .main { min-width: 0; } .svslot .main b { color: var(--ui-text); font-size: 16px; }
+.svslot.empty .main b { color: var(--ui-dim); font-weight: normal; }
+.svslot .sub { margin-top: 3px; font-size: 13px; color: #c8b890; }
+.svslot .cl { display: block; margin-top: 4px; font-size: 12.5px; } .svslot .cl .ic, .cloud-line .ic { width: 15px; height: 15px; margin: 0 5px -3px 0; }
+.svslot .cl.ok { color: var(--ui-green); } .svslot .cl.warn { color: #f0a050; } .svslot .cl.off { color: var(--ui-dim); }
+.svslot .acts { display: flex; gap: 8px; } .svslot .acts button { padding: 8px 16px; font-size: 14px; min-width: 76px; }
+button.warn { background: linear-gradient(#a8321e, #5a0e08); border-color: #ff9a7a; color: #fff0e0; }
+.cloud-line { margin: 8px 0 0; min-height: 1.5em; font-size: 12.5px; line-height: 1.6; text-align: center; }
+#cloud-title { margin: 6px 0 0; }
+#btn-continue small { display: block; margin-top: 2px; font-size: 12px; font-weight: normal; opacity: .85; }
+#menu-slots .btns { margin-top: 12px; }
+@media (max-width: 560px) {
+  .svslot { grid-template-columns: 42px 1fr; gap: 8px 10px; padding: 9px 10px; } .svslot .no { font-size: 24px; }
+  .svslot .acts { grid-column: 1 / -1; } .svslot .acts button { flex: 1; }
+}
+@media (max-height: 430px) {
+  #menu-slots .panel { padding: 10px 16px; } #menu-slots h2 { margin: 0; font-size: 18px; } #slots-sub { display: none; }
+  #slots-list { gap: 6px; margin: 8px 0 2px; } .svslot { padding: 6px 10px; } .svslot .acts button { padding: 6px 12px; }
+  #cloud-title { display: none; }
+}

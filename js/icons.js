@@ -28,6 +28,8 @@ const ICONS = {
   target: '<circle cx="12" cy="12" r="7.6"/><circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 2v3.4M12 18.6V22M2 12h3.4M18.6 12H22"/>',
   play: '<path class="f" d="M8 5.2v13.6L19 12z"/>',
   save: '<path class="f" d="M6 3.6h12v16.8l-6-3.6-6 3.6z"/><path d="M9 9.6l2.2 2.2L15.4 7.6"/>',
+  home: '<path class="f" d="M3.6 11.4 12 4l8.4 7.4v8.2H3.6z"/><path d="M10 19.6v-5.2h4v5.2"/><path d="M2.8 12.2 12 4l9.2 8.2" opacity=".7"/>',
+  cloud: '<path class="f" d="M7.4 18.6a4.4 4.4 0 0 1-.6-8.7 5.6 5.6 0 0 1 10.8 1.2 3.8 3.8 0 0 1-.4 7.5z"/><path d="M9.8 14.4l2.2 2.2 3.4-3.8" opacity=".9"/>',
   music: '<path d="M9 18V5.6l10-2V16"/><circle class="f" cx="6.6" cy="18" r="2.4"/><circle class="f" cx="16.6" cy="16" r="2.4"/>',
   // ---------- 狀態 ----------
   heart: '<path class="f" d="M12 20.4S3.4 15.2 3.4 9.2A4.6 4.6 0 0 1 12 6.8a4.6 4.6 0 0 1 8.6 2.4c0 6-8.6 11.2-8.6 11.2z"/>',

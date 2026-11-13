@@ -139,8 +139,10 @@
       <div id="diff-row"><span>新遊戲難度</span><div class="seg" id="diff-seg"></div><em id="diff-desc"></em></div>
       <button id="btn-continue" class="hidden">繼續遊戲</button>
       <button id="btn-new">開始新遊戲</button>
+      <button id="btn-slots" class="ghost" data-icon="save" data-label="存檔槽"></button>
       <button data-settings class="ghost" data-icon="gear" data-label="設定"></button>
     </div>
+    <p id="cloud-title" class="dim cloud-line"></p>
     <p id="loading" class="dim">載入中……</p>
   </div>
 </div>
@@ -148,8 +150,18 @@
 <div id="menu-pause" class="menu hidden">
   <div class="panel">
     <h2>暫停</h2>
-    <p class="dim">進度會自動儲存於此瀏覽器。</p>
-    <div class="btns col"><button data-close data-icon="play" data-label="繼續遊戲"></button><button id="btn-save" data-icon="save" data-label="立即存檔"></button><button data-settings data-icon="gear" data-label="設定"></button><button id="btn-intro" data-icon="film" data-label="重看開場動畫"></button><button id="btn-music" data-icon="music" data-label="切換配樂"></button><button id="btn-tutor">關閉新手引導</button></div>
+    <p class="dim" id="pause-slot">進度會自動儲存。</p>
+    <div class="btns col"><button data-close data-icon="play" data-label="繼續遊戲"></button><button id="btn-save" data-icon="save" data-label="立即存檔"></button><button id="btn-slots2" data-icon="save" data-label="存檔槽・另存"></button><button data-settings data-icon="gear" data-label="設定"></button><button id="btn-intro" data-icon="film" data-label="重看開場動畫"></button><button id="btn-music" data-icon="music" data-label="切換配樂"></button><button id="btn-tutor">關閉新手引導</button><button id="btn-home" data-icon="home" data-label="返回標題頁"></button></div>
+  </div>
+</div>
+
+<div id="menu-slots" class="menu hidden">
+  <div class="panel wide">
+    <h2 id="slots-title">存檔槽</h2>
+    <p id="slots-sub" class="dim"></p>
+    <div id="slots-list"></div>
+    <p id="cloud-state" class="dim cloud-line"></p>
+    <div class="btns"><button id="cloud-sync" class="ghost">立即同步</button><button id="slots-back">返回</button></div>
   </div>
 </div>
 
@@ -205,13 +217,13 @@
 </div>
 
 <div id="menu-dead" class="menu hidden red">
-  <div class="panel"><h2>你倒下了</h2><p id="dead-text"></p><div class="btns col"><button id="btn-respawn">重新振作</button></div></div>
+  <div class="panel"><h2>你倒下了</h2><p id="dead-text"></p><div class="btns col"><button id="btn-respawn">重新振作</button><button id="btn-home2" class="ghost">返回標題頁</button></div></div>
 </div>
 
 <div id="menu-win" class="menu hidden">
   <div class="panel wide"><h1 id="win-title">天下三分</h1>
     <p class="story" id="win-story"></p>
-    <div class="btns"><button id="btn-title" class="hidden" onclick="location.reload()">回到標題畫面</button><button data-close>繼續在亂世中求生</button></div></div>
+    <div class="btns"><button id="btn-title" class="hidden">回到標題畫面</button><button data-close>繼續在亂世中求生</button></div></div>
 </div>
 
 <script type="module" src="./js/main.js"></script>

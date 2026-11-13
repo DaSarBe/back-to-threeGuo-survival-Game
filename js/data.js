@@ -44,8 +44,8 @@ export const WEAPONS = {
   qinggang: { n: '青釭劍', i: '💠', type: 'melee', dmg: 115, reach: 2.8, rate: 0.42 },
   yitian: { n: '倚天劍', i: '⚜️', type: 'melee', dmg: 125, reach: 2.8, rate: 0.45 },
   tbow: { n: '鐵胎弓', i: '🎯', type: 'bow', dmg: 110, rate: 0.7, ammo: 'arrow' },
-  // ---- 阿凱的特製步槍（羈絆 Lv5 解鎖）：子彈完全無限、不用換彈匣，但連續射擊會過熱；精準、威力小 ----
-  smg: { n: '凱式特製步槍', i: '⚙️', type: 'gun', dmg: 20, mag: 0, rate: 0.22, reload: 0, spread: 0.0035, range: 260, ammo: null, kick: 0.025, fov: 40,
+  // ---- 阿凱的特製步槍（羈絆 Lv5 解鎖）：子彈完全無限、不用換彈匣，但連續射擊會過熱；精準、單發威力略高於手槍 ----
+  smg: { n: '凱式特製步槍', i: '⚙️', type: 'gun', dmg: 44, mag: 0, rate: 0.22, reload: 0, spread: 0.0035, range: 260, ammo: null, kick: 0.025, fov: 40,
     heat: { shot: 3.7, cool: 25, delay: 0.4, lockCool: 28, resume: 30 } }, // 每發 +3.7% 熱度；停火 0.4 秒後每秒降 25%；過熱時每秒降 28%，降到 30% 才能再開火
 };
 
@@ -65,7 +65,7 @@ export const RECIPES = [
   { id: 'drypowder', cat: 'material', n: '烘乾火藥', d: '須在營火旁', near: 'fire', need: { wetPowder: 2, wood: 1 }, give: { powder: 2 } },
   { id: 'oilcloth', cat: 'survival', n: '油布包', d: '獸油浸布，大幅減緩火藥受潮', once: 'oilcloth', need: { meat: 3, herb: 2 }, give: { oilcloth: 1 } },
   { id: 'cooked', cat: 'survival', n: '烤肉', d: '熟食更能充飢', need: { meat: 1, wood: 1 }, give: { cooked: 1 } },
-  { id: 'smg', cat: 'weapon', n: '凱式特製步槍', d: '阿凱的特製步槍：子彈無限、不用換彈匣、不怕受潮，精準；威力小，連續射擊太久會過熱', req: 'akai5', need: { parts: 3, iron: 10, powder: 6 }, weapon: 'smg' },
+  { id: 'smg', cat: 'weapon', n: '凱式特製步槍', d: '阿凱的特製步槍：子彈無限、不用換彈匣、不怕受潮，精準；威力比手槍略強，連續射擊太久會過熱', req: 'akai5', need: { parts: 3, iron: 10, powder: 6 }, weapon: 'smg' },
   { id: 'firebomb', cat: 'throw', n: '燃燒彈 ×2', d: '獸油火罐，落地起火燒一片（雨天燒得短）', need: { powder: 1, meat: 1, wood: 1 }, give: { firebomb: 2 } },
   { id: 'mine', cat: 'throw', n: '地雷', d: '埋在地上，敵人踩到就爆炸', need: { powder: 2, iron: 2 }, give: { mine: 1 } },
   { id: 'medicine', cat: 'survival', n: '金瘡藥', d: '按 H 使用，恢復生命', need: { herb: 2 }, give: { medicine: 1 } },
