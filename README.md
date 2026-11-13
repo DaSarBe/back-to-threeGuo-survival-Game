@@ -85,7 +85,32 @@ npx http-server -p 8080     # 或 python3 -m http.server 8080
 
 - **3 個存檔槽**：開始新遊戲時選槽（已有存檔的槽要按兩次確認才會覆蓋）；標題頁的「繼續遊戲」讀最近一次的存檔，「存檔槽」可挑槽讀取或刪除。每個槽顯示日數、章節、官職、遊玩時間與存檔時間。舊版的單一存檔會自動搬到存檔 1。
 - **暫停選單**：「立即存檔」存到目前的槽，「存檔槽・另存」可存到別的槽（之後的自動存檔改寫到那裡），「返回標題頁」會先存檔、等雲端上傳完再回到標題畫面。切到背景、令旗台、就寢、過章節也都會自動存檔。
-- **雲端存檔**：在 claude.ai 的遊戲頁面登入時，存檔會自動同步到玩家自己的私人空間（平台的 `db`，路徑 `data/users/<玩家id>/slot1～3`，連頁面擁有者也看不到），換裝置也能接著玩。同一個槽以最後存檔時間較新的為準，刪除也會同步。分享給別人時要給「貢獻者」以上的權限才能寫入雲端；在其他環境（本機、GitHub Pages）沒有雲端，會安靜地只存本機。設定（靈敏度、按鍵配置）只存在各自的裝置。
+- **雲端存檔（Firebase）**：用 Email＋密碼登入（存檔槽選單裡有登入／註冊／忘記密碼），登入後存檔自動同步到 Cloud Firestore，換裝置登入同一帳號就能接著玩。同一個槽以最後存檔時間較新的為準，刪除也會同步；正在玩的槽不會被雲端覆蓋。一般自動存檔每 15 秒最多上傳一次，手動存檔、返回標題頁會立刻上傳；連不上時進度先存本機，恢復後自動補傳。登出後這台裝置的存檔還在；換成另一個帳號登入時會詢問要清除還是上傳這台的存檔。沒有設定 Firebase 或沒登入時只存本機。設定（靈敏度、按鍵配置）只存在各自的裝置。
+
+### 雲端存檔設定（Firebase）
+
+程式直接呼叫 Firebase 的 REST API（Authentication 與 Firestore），不需要安裝 SDK，也不用建置。
+
+1. 到 [Firebase 主控台](https://console.firebase.google.com/) 建立專案（可以不開 Google Analytics）。
+2. **Authentication** → 開始使用 → 登入方式 → 啟用「電子郵件／密碼」。
+3. **Firestore Database** → 建立資料庫（正式版模式，地區選 `asia-east1` 台灣）。
+4. Firestore 的「規則」分頁貼上下面的規則並發布（每個人只能讀寫自己的 `users/<uid>/saves/slot1～3`）：
+
+   ```
+   rules_version = '2';
+   service cloud.firestore {
+     match /databases/{database}/documents {
+       match /users/{uid}/saves/{slot} {
+         allow read, write: if request.auth != null && request.auth.uid == uid
+                            && slot in ['slot1', 'slot2', 'slot3'];
+       }
+     }
+   }
+   ```
+5. 專案設定 → 一般 → 「您的應用程式」→ 新增網頁應用程式，把 `apiKey` 與 `projectId` 填進 `js/firebase-config.js`。這兩個是公開的網頁設定，不是機密，安全性靠上面的規則。
+6. （建議）Google Cloud 主控台 → API 和服務 → 憑證 → 該 API 金鑰 → 應用程式限制選「HTTP 參照位址」，只放行遊戲網站的網址。
+
+存檔文件格式：`users/<uid>/saves/slot<n>` ＝ `{ v, ts（最後存檔時間）, json（整份存檔字串）, deleted?（刪除標記）}`。
 
 ## 結構
 
@@ -110,7 +135,8 @@ js/icons.js     遊戲內圖示（SVG 線條圖示；物品與訊息用彩色圖
 js/mapview.js   大地圖
 js/weather.js   天氣與火藥受潮
 js/settings.js  玩家設定
-js/saves.js     存檔槽（localStorage）與雲端存檔（claude.ai 平台 db）同步
+js/saves.js     存檔槽（localStorage）與 Firebase 雲端存檔（登入、Firestore 同步）
+js/firebase-config.js  Firebase 的 apiKey / projectId（留空＝停用雲端存檔）
 js/slots.js     存檔槽選單、標題頁繼續遊戲、返回標題頁
 js/layout.js    手機按鍵配置編輯器
 js/skills.js    名將絕技

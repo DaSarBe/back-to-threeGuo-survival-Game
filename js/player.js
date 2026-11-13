@@ -441,6 +441,7 @@ export function initInput(canvas) {
   canvas.addEventListener('contextmenu', e => e.preventDefault());
   document.addEventListener('wheel', e => { if (!G.menu) P.cycle(e.deltaY > 0 ? 1 : -1); }, { passive: true });
   document.addEventListener('keydown', e => {
+    const tg = e.target; if (tg && (tg.tagName === 'INPUT' || tg.tagName === 'TEXTAREA')) { if (e.code === 'Escape') tg.blur(); return; } // 在輸入框打字時不觸發遊戲／選單快捷鍵（C、Tab 會關選單）
     if (e.code === 'Tab') e.preventDefault();
     if (G.menu === 'cutscene') { if (!e.repeat) G.skipCutscene(); return; }
     if (G.menu === 'intro') { if (!e.repeat) G.skipIntro(); return; }

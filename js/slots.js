@@ -1,6 +1,6 @@
 // 存檔槽選單：讀取、開始新遊戲、存檔／另存、刪除，以及雲端同步狀態；標題頁的「繼續遊戲」與返回標題頁
 import { G } from './state.js';
-import { SLOTS, info, read, remove, anySaved, latest, cloudInfo, onCloud, CLOUD_TEXT, syncAll, flushCloud } from './saves.js';
+import { SLOTS, info, read, remove, anySaved, latest, cloudInfo, onCloud, CLOUD_TEXT, syncAll, flushCloud, cloudSignIn, cloudSignOut, cloudReset } from './saves.js';
 import { icon, esc } from './icons.js';
 
 const $ = id => document.getElementById(id);
@@ -13,11 +13,11 @@ const SUB = {
   save: '把目前的進度存到這個槽，之後的自動存檔也會存在這裡。',
 };
 const TITLE = { load: '存檔槽', new: '開始新遊戲', save: '存檔槽・另存' };
-const SHORT = { off: '雲端存檔：未啟用（進度存在這台裝置）', connecting: '雲端存檔：連線中……', ready: '雲端存檔：已連線', syncing: '雲端存檔：同步中……', error: '雲端存檔：暫時連不上，稍後自動重試', denied: '雲端存檔：此帳號沒有寫入權限，進度只存在這台裝置' };
+const SHORT = { off: '雲端存檔：未啟用（進度存在這台裝置）', signedout: '雲端存檔：尚未登入（到「存檔槽」登入後自動同步）', connecting: '雲端存檔：連線中……', ready: '雲端存檔：已連線', syncing: '雲端存檔：同步中……', error: '雲端存檔：暫時連不上，稍後自動重試', denied: '雲端存檔：Firebase 不允許寫入，進度只存在這台裝置' };
 
 const fmtPlay = s => { const m = Math.floor(s / 60); return m < 1 ? '不到 1 分鐘' : m < 60 ? `${m} 分鐘` : `${Math.floor(m / 60)} 小時 ${m % 60} 分`; };
 const fmtTs = ts => { if (!ts) return ''; const d = new Date(ts), p = n => String(n).padStart(2, '0'); return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
-const cloudOn = () => { const c = cloudInfo(); return !!c.api && c.state !== 'denied'; };
+const cloudOn = () => { const c = cloudInfo(); return !!c.auth && c.state !== 'denied' && c.state !== 'signedout'; };
 const blocked = () => { const c = cloudInfo(); return (c.state === 'connecting' || c.state === 'syncing') && Date.now() - t0 < 6000; }; // 剛開機時等一下雲端同步，避免先讀到舊進度
 
 // ---------- 標題頁 ----------
@@ -36,6 +36,7 @@ export function refreshTitle() {
 
 // ---------- 存檔槽選單 ----------
 export function openSlots(m, origin) {
+  const mm = $('cloud-msg'); if (mm) mm.textContent = '';
   mode = m; from = origin || (G.started ? 'pause' : 'start'); disarm();
   G.ui.open('slots'); render();
 }
@@ -44,8 +45,8 @@ function arm(k) { armed = k; clearTimeout(armT); armT = setTimeout(() => { armed
 
 function cloudBadge(n, s) {
   const c = cloudInfo();
-  if (!c.api) return `<span class="cl off">${icon('cloud')}僅存這台裝置</span>`;
-  if (c.state === 'denied') return `<span class="cl warn">${icon('cloud')}沒有雲端寫入權限</span>`;
+  if (!c.auth) return `<span class="cl off">${icon('cloud')}${c.state === 'signedout' ? '未登入雲端，僅存這台裝置' : '僅存這台裝置'}</span>`;
+  if (c.state === 'denied') return `<span class="cl warn">${icon('cloud')}Firebase 不允許寫入</span>`;
   const r = c.slot[n];
   if (r === 'err') return `<span class="cl warn">${icon('cloud')}同步失敗（存檔太大或網路問題）</span>`;
   if (r === 'pulled') return `<span class="cl ok">${icon('cloud')}已從雲端更新</span>`;
@@ -82,8 +83,12 @@ function render() {
 }
 function updateCloudLine() {
   const c = cloudInfo(), el = $('cloud-state'); if (!el) return;
-  el.innerHTML = `${icon('cloud')}${esc(CLOUD_TEXT[c.state] || '')}${c.lastOk && c.api && c.state !== 'denied' ? `（上次同步 ${fmtTs(c.lastOk)}）` : ''}`;
-  const b = $('cloud-sync'); b.classList.toggle('hidden', !c.api || c.state === 'denied'); b.disabled = c.state === 'syncing' || c.state === 'connecting';
+  const who = c.auth && c.auth.email ? `（${esc(c.auth.email)}）` : '';
+  el.innerHTML = `${icon('cloud')}${esc(CLOUD_TEXT[c.state] || '')}${who}${c.lastOk && c.auth && c.state !== 'denied' ? `（上次同步 ${fmtTs(c.lastOk)}）` : ''}`;
+  const busy = c.state === 'syncing' || c.state === 'connecting';
+  $('cloud-form').classList.toggle('hidden', c.state !== 'signedout');
+  $('cloud-sync').classList.toggle('hidden', !c.auth || c.state === 'denied' || c.state === 'signedout'); $('cloud-sync').disabled = busy;
+  $('cloud-logout').classList.toggle('hidden', !c.auth || c.state === 'signedout');
 }
 export function pauseLine() {
   const el = $('pause-slot'); if (!el) return;
@@ -115,6 +120,23 @@ export function initSlots() {
   $('btn-slots').onclick = () => openSlots('load', 'start');
   $('btn-slots2').onclick = () => openSlots('save', 'pause');
   $('slots-back').onclick = () => G.slotsBack();
+  const msg = (t, cls = '') => { const m = $('cloud-msg'); m.textContent = t; m.className = 'cloud-line ' + cls; };
+  let busy = false;
+  const auth = async create => {
+    if (busy) return; const email = $('cloud-email').value.trim(), pass = $('cloud-pass').value;
+    if (!email || !pass) return msg('請輸入 Email 和密碼。', 'warn');
+    busy = true; msg(create ? '註冊中……' : '登入中……');
+    const err = await cloudSignIn(email, pass, create); busy = false;
+    if (err) return msg(err, 'warn');
+    $('cloud-pass').value = ''; msg(create ? '註冊成功，已登入。' : '登入成功。', 'ok'); render(); refreshTitle();
+  };
+  $('cloud-form').onsubmit = e => { e.preventDefault(); auth(false); };
+  $('cloud-signup').onclick = () => auth(true);
+  $('cloud-forgot').onclick = async () => {
+    const email = $('cloud-email').value.trim(); if (!email) return msg('先在上面輸入 Email，再按「忘記密碼」。', 'warn');
+    const err = await cloudReset(email); msg(err || '已寄出重設密碼的信，請到信箱查看。', err ? 'warn' : 'ok');
+  };
+  $('cloud-logout').onclick = async () => { await cloudSignOut(); msg('已登出。這台裝置上的存檔還在。'); render(); refreshTitle(); };
   $('cloud-sync').onclick = () => { syncAll().then(() => { if (G.menu === 'slots') render(); refreshTitle(); }); };
   onCloud(() => { refreshTitle(); if (G.menu === 'slots') render(); });
   $('btn-continue').onclick = () => { const n = latest(), sv = n && read(n); if (sv) G.startGame(sv, n); };
