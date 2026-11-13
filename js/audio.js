@@ -49,6 +49,11 @@ const SOUNDS = {
   horn(v) { tone('sawtooth', 110, 112, 1.6, 0.25 * v); tone('sawtooth', 165, 166, 1.6, 0.14 * v, 0.1); },
   siren(v) { for (let i = 0; i < 3; i++) { tone('sawtooth', 650, 950, 0.45, 0.07 * v, i * 0.9); tone('sawtooth', 950, 650, 0.45, 0.07 * v, i * 0.9 + 0.45); } },
   whoosh(v) { noise(1.6, 0.6 * v, 'bandpass', 300, 3000); tone('sine', 80, 400, 1.5, 0.3 * v); },
+  gong(v) { tone('sine', 98, 94, 3.2, 0.32 * v); tone('sine', 147, 143, 2.6, 0.16 * v); tone('sine', 233, 228, 2.0, 0.1 * v); tone('triangle', 392, 380, 1.2, 0.05 * v); noise(0.5, 0.12 * v, 'bandpass', 1600, 700); }, // 鑼
+  drum(v) { tone('sine', 78, 42, 0.45, 0.6 * v); noise(0.14, 0.35 * v, 'lowpass', 380, 120); }, // 戰鼓
+  drumroll(v) { for (let i = 0; i < 9; i++) { const d = i * (0.17 - i * 0.008); tone('sine', 72, 44, 0.3, (0.25 + i * 0.05) * v, d); noise(0.1, (0.12 + i * 0.03) * v, 'lowpass', 360, 120, d); } },
+  stamp(v) { tone('square', 140, 50, 0.09, 0.22 * v); noise(0.12, 0.45 * v, 'lowpass', 900, 200); }, // 蓋印
+  brush(v) { noise(0.32, 0.12 * v, 'bandpass', 2600, 1200); }, // 毛筆一劃
   hiss(v) { noise(1.1, 0.35 * v, 'highpass', 4200, 2400); noise(0.25, 0.25 * v, 'bandpass', 1800, 900); }, // 槍管過熱的嘶聲
   hum(v) { tone('sine', 55, 55, 2.5, 0.12 * v); tone('sine', 82, 82, 2.5, 0.06 * v); },
   wolf(v) { tone('sine', 380, 620, 0.7, 0.14 * v); tone('sine', 620, 400, 0.8, 0.14 * v, 0.7); },

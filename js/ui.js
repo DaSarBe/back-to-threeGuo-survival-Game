@@ -19,6 +19,7 @@ import { DIFFS, diffId } from './difficulty.js';
 import { skillOf, skillStatus } from './skills.js';
 import { defenseHud } from './defense.js';
 import { toggleTutorial, syncButton } from './tutorial.js';
+import { rank, nextRank, merit, callYou } from './ranks.js';
 
 const $ = id => document.getElementById(id);
 const el = {};
@@ -63,7 +64,7 @@ export const ui = {
     for (const m of MENUS) $('menu-' + m).classList.add('hidden');
     G.menu = null; G.lockPointer && G.lockPointer(); document.body.classList.remove('menu-open');
   },
-  escape() { if (G.menu === 'layout') G.cancelLayout(); else if (G.menu === 'settings') this.closeSettings(); else if (['pause', 'inv', 'shop', 'dialog', 'win', 'workshop', 'map'].includes(G.menu)) this.close(); },
+  escape() { if (G.menu === 'rite') G.riteNext(); else if (G.menu === 'layout') G.cancelLayout(); else if (G.menu === 'settings') this.closeSettings(); else if (['pause', 'inv', 'shop', 'dialog', 'win', 'workshop', 'map'].includes(G.menu)) this.close(); },
   openMap() { openMap(); },
   // 直向：快捷鍵太多時先縮小、縮窄間距讓它們排成一排；真的排不下才換行，並把右側按鍵往上讓
   fitQuick() {
@@ -246,10 +247,11 @@ export const ui = {
     if (!node) return this.close();
     this.open('dialog');
     $('dlg-name').textContent = actor.name; $('dlg-title').textContent = actor.def.title || '';
-    $('dlg-text').innerHTML = iconText(node.text);
+    const ally = actor.faction === 'ally' || actor.id === 'attendant', cy = t => ally ? callYou(t) : t; // 友軍依官職稱呼你
+    $('dlg-text').innerHTML = iconText(cy(node.text));
     const box = $('dlg-opts'); box.innerHTML = '';
     for (const o of node.opts || [{ t: '告辭' }]) {
-      const b = document.createElement('button'); b.innerHTML = iconText(o.t); b.disabled = !!o.dis;
+      const b = document.createElement('button'); b.innerHTML = iconText(cy(o.t)); b.disabled = !!o.dis;
       b.onclick = () => { const next = o.fn ? o.fn() : null; if (next === 'shop') ui.open('shop'); else if (G.menu === 'dialog') ui.showDialog(actor, next); };
       box.appendChild(b);
     }
@@ -257,7 +259,7 @@ export const ui = {
 
   // ---------- 即時訊息 ----------
   msg(text, cls = 'info') {
-    const d = document.createElement('div'); d.className = cls; d.innerHTML = iconText(text); el.msgs.appendChild(d);
+    const d = document.createElement('div'); d.className = cls; d.innerHTML = iconText(callYou(text)); el.msgs.appendChild(d);
     while (el.msgs.children.length > (G.touch ? 3 : 6)) el.msgs.firstChild.remove();
     setTimeout(() => { d.style.opacity = 0; setTimeout(() => d.remove(), 700); }, cls === 'quest' || cls === 'say' ? 8000 : 4500);
   },
@@ -294,6 +296,9 @@ export const ui = {
     const showDamp = P.damp > 0.5 || raining();
     if (last.showDamp !== showDamp) { last.showDamp = showDamp; el['st-damp'].classList.toggle('hidden', !showDamp); }
     if (showDamp) { const w = Math.round(P.damp); if (last.damp !== w) { last.damp = w; el['b-damp'].style.width = w + '%'; el['b-damp'].classList.toggle('low', w > 60); $('v-damp').textContent = w + '%'; } }
+    // 官職與戰功
+    { const r = rank(), nx = nextRank(), m = merit(), key = r.n + m;
+      if (last.rank !== key) { last.rank = key; $('rank-tag').innerHTML = `<span class="seal-mini">${r.n[0]}</span><b>${r.n}</b><em>戰功 ${m}${nx ? ` / ${nx.need}` : ''}</em>`; } }
     // 特製步槍的熱度條
     if (WEAPONS[P.cur].heat) {
       const k = Math.round(P.heat || 0), oh = !!P.overheat;

@@ -445,6 +445,7 @@ export function initInput(canvas) {
     if (G.menu === 'cutscene') { if (!e.repeat) G.skipCutscene(); return; }
     if (G.menu === 'intro') { if (!e.repeat) G.skipIntro(); return; }
     if (G.menu === 'story') { if (!e.repeat) G.skipStory(); return; }
+    if (G.menu === 'rite') { if (!e.repeat && ['Space', 'Enter', 'KeyE', 'Escape', 'NumpadEnter'].includes(e.code)) G.riteNext(); return; }
     if (G.menu) {
       if ((e.code === 'Escape' || e.code === 'Tab' || e.code === 'KeyC' || (e.code === 'KeyM' && G.menu === 'map')) && !e.repeat) G.ui.escape();
       return;

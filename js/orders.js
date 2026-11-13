@@ -1,5 +1,6 @@
 // 軍火訂單與聲望：主公與糜竺會下訂單，準時交貨得錢與聲望，逾期扣聲望
 import { G } from './state.js';
+import { addMerit } from './ranks.js';
 import { ITEMS } from './data.js';
 import { audio } from './audio.js';
 import { rnd, rndInt, pick } from './util.js';
@@ -59,7 +60,7 @@ export function deliver(id) {
   for (const o of done) {
     P.take(o.item, o.qty); P.give('coin', o.reward);
     const before = repTier(id).n; OR.rep[id] += o.rep; const after = repTier(id).n;
-    G.ui.msg(`📜 交貨完成：${fmt(o)}，獲得 🪙${o.reward}，${ISSUERS[id].n}聲望 +${o.rep}`, 'get');
+    G.ui.msg(`📜 交貨完成：${fmt(o)}，獲得 🪙${o.reward}，${ISSUERS[id].n}聲望 +${o.rep}，戰功 +4`, 'get'); addMerit(4);
     if (after !== before) G.ui.msg(`🤝 與${ISSUERS[id].n}的關係提升為「${after}」！` + (after === '摯友' ? (id === 'mizhu' ? '商攤 8 折。' : '可招募精銳兵種，招兵 8 折。') : (id === 'mizhu' ? '商攤 9 折。' : '招兵 9 折。')), 'quest');
   }
   OR.active = OR.active.filter(o => !done.includes(o));

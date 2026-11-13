@@ -16,7 +16,9 @@ import { BM, loadBM, ending } from './blackmarket.js';
 import { playIntro, updateIntro, skipIntro } from './intro.js';
 import { syncOutposts, setDeviceActive, outposts, siteVisible } from './world.js';
 import { spawnAkai, updateAkai, AK, akai, joined, addBond } from './akai.js';
-import { updateBarks } from './barks.js';
+import { updateBarks, say } from './barks.js';
+import { initRites, updateRites, killCam, onStageRites, rite } from './rites.js';
+import { addMerit, noteKill, noteDeath, noteDuel, tickPlay, rank } from './ranks.js';
 import { initLights, initFlashlight, updateLights } from './lights.js';
 import { commandSkill, updateSkills } from './skills.js';
 import { updateDefense, siegeHit, defenseActive } from './defense.js';
@@ -45,6 +47,7 @@ function init() {
   buildWorld(scene); initFx(scene); ui.init(); initInput(canvas); initLayout();
   G.openLayoutEditor = openLayoutEditor; G.cancelLayout = cancelLayout;
   G.commandSkill = commandSkill; G.tutorSkip = skipTutorial; G.onSiegeHit = siegeHit;
+  initRites(); G.resetInput = resetInput; G.sayLine = (a, t) => say(a, t, 'greet');
   G.applySettings('all'); initWorkshopUI();
   const resize = () => {
     const w = innerWidth, h = innerHeight, asp = w / h;
@@ -125,6 +128,7 @@ function start(save) {
 }
 function afterIntro() {
   ui.dirty = true;
+  rite({ type: 'chapter', stage: G.stage });
   ui.msg('……頭好痛。這裡是哪裡？手機沒有訊號，四周只有荒野。', 'say');
   setTimeout(() => ui.msg('身旁有一只跟你一起掉下來的軍火箱，先打開看看。', 'say'), 3500);
   if (!G.touch && !document.pointerLockElement) ui.msg('點一下畫面，開始操控視角。', 'info');
@@ -219,8 +223,16 @@ function outpostGuards(ids, n = 2) { // 前哨營派兩名守衛（黎明時補�
     for (const k of [-1, 1].slice(0, Math.max(0, n - have))) { const g = new Actor('ally_soldier', cx + k * 3, cz + 4); g.outpost = id; g.homeYaw = g.yaw = Math.atan2(SITES.camp.x - cx, SITES.camp.z - cz) + PI; }
   }
 }
-G.onKill = (a) => {
-  if (a.id === 'lvbu' && !AK().arrived) setTimeout(() => playLvbuDeath(a), 1400); // 呂布陣亡動畫 → 阿凱登場
+G.onKill = (a, src) => {
+  const P = player, byP = src === P, byAlly = src && src.faction === 'ally';
+  if (byP || byAlly) noteKill(byP);
+  if (a.def.boss) {
+    const duel = G.battle && G.battle.mode === 'duel' && G.battle.boss === a;
+    killCam(a, !!a.def.flee); // 慢動作＋「斬　某某」＋朱印，附近敵兵潰散
+    addMerit(30, `${a.def.flee ? '擊退' : '斬殺'}${a.name}`, true);
+    if (duel) { noteDuel(); addMerit(20, '單挑勝利', true); }
+  }
+  if (a.id === 'lvbu' && !AK().arrived) rite({ type: 'fn', fn: () => playLvbuDeath(a) }); // 呂布陣亡動畫 → 阿凱登場
   if (a.def.boss) {
     ui.msg(`${a.name} 已被擊敗！`, 'quest'); audio.play('horn', 0.8); checkQuest();
     if (UNLOCK_MSG[a.id]) setTimeout(() => ui.msg('🔓 ' + UNLOCK_MSG[a.id], 'quest'), 1800);
@@ -238,7 +250,7 @@ G.onStage = done => {
   if (done >= 0 && SITES['op_' + ['turban', 'sishui', 'hulao', 'meiwu', 'baima', 'wuchao', 'changban', 'chibi'][done]]) setTimeout(() => ui.msg('⛺ 下一個頭目據點前方設立了友軍前哨營，可在那裡存檔、重生。', 'info'), 5200);
   if (done === 0) setTimeout(() => ui.msg('🚩 營區的令旗台除了存檔，還能發起「守營戰」：擊退來襲的敵軍領取獎賞。', 'info'), 9000);
   if (done === 4) setTimeout(() => ui.msg('董卓伏誅，然而天下並未太平——袁紹已在北方起兵。', 'quest'), 2500);
-  if (done === 8) setTimeout(() => { const e = ending(); document.getElementById('win-title').textContent = e.title; document.getElementById('win-story').innerHTML = e.text; ui.open('win'); }, 3000);
+  onStageRites(done, done === 8 ? () => { const e = ending(); document.getElementById('win-title').textContent = e.title; document.getElementById('win-story').innerHTML = e.text; ui.open('win'); } : null);
 };
 G.openWorkshop = openWorkshop;
 G.openHub = openHub; G.openDevice = openDevice; G.openMail = openMail; G.deviceStatus = deviceStatus; G.skipStory = skipStory;
@@ -249,7 +261,7 @@ G.goHome = () => playGoHome(() => {
 G.wsDeposit = depositFromAttendant;
 // 玩家倒下被救回營地：隨行部隊與侍從一起撤回
 G.onRespawn = () => {
-  const P = player;
+  const P = player; noteDeath();
   if (G.squadCmd === 'hold') { G.squadCmd = 'follow'; G.holdPos = null; }
   for (const a of followers()) { a.target = null; a.pos.set(P.pos.x + rnd(-4, 4), 0, P.pos.z + rnd(-4, 4)); }
   for (const a of G.attendants) { if (a.ws) continue; a.wait = false; a.state = 'idle'; a.node = null; a.pos.set(P.pos.x + rnd(-2, 2), 0, P.pos.z + rnd(-2, 2)); }
@@ -279,6 +291,7 @@ function spawnGroup(n, rmin, rmax, hunt) {
 }
 function onDawn() {
   const P = player;
+  const r = rank(); if (r.pay > 0) { P.give('coin', r.pay); ui.msg(`領到日俸 ${r.pay} 錢（官職：${r.n}）。`, 'get'); }
   for (const c of camps) {
     if (G.killed[c.boss] || dist2(P.pos.x, P.pos.z, c.members[0].x, c.members[0].z) < 170) continue;
     for (const m of c.members) if (m.actor && !m.actor.alive && !m.actor.def.boss) m.actor = spawnEnemy(m.id, m.x, m.z);
@@ -447,7 +460,12 @@ G.applySettings = (key = 'all') => {
 // ------------------------------------------------------------------ 主迴圈
 function frame(t) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, (t - lastT) / 1000 || 0.016); lastT = t;
+  let dt = Math.min(0.05, (t - lastT) / 1000 || 0.016); lastT = t;
+  if (G.slow) { // 頭目終結：先慢動作，再漸漸恢復正常速度
+    const s = G.slow; s.t += dt;
+    const k = s.t < s.hold ? 0.2 : Math.min(1, 0.2 + (s.t - s.hold) / (s.dur - s.hold) * 0.8);
+    if (s.t >= s.dur) G.slow = null; else dt *= k;
+  }
   const cam = G.camera;
   if (!started) { // 標題畫面：環繞軍營
     const a = t / 9000, s = SITES.camp;
@@ -461,7 +479,7 @@ function frame(t) {
     for (const a of G.actors) a.update(dt);
     for (const a of G.animals) a.update(dt);
     for (const a of G.attendants) a.update(dt);
-    updateAkai(dt); updateWind(dt); updateSkills(dt); updateDefense(dt); updateLights(dt);
+    updateAkai(dt); updateWind(dt); updateSkills(dt); updateDefense(dt); updateLights(dt); tickPlay(dt);
     separate();
     checkArena(dt);
     updateProjectiles(dt); updatePickups(dt); updateEffects(dt); updateNodes(dt); updateMines(dt);
@@ -475,7 +493,7 @@ function frame(t) {
   } else if (G.menu === 'cutscene') {
     updateCutscene(dt); updateSky(dt, cam.position);
   }
-  if (started) { updateBarks(G.menu ? 0 : dt); updateTutorial(dt); } // 選單開著時泡泡暫停並隱藏
+  if (started) { updateBarks(G.menu ? 0 : dt); updateTutorial(dt); updateRites(dt); } // 選單開著時泡泡暫停並隱藏
   G.renderer.render(G.renderScene || G.scene, cam);
 }
 

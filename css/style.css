@@ -441,3 +441,94 @@ body.touch #dlg-opts button { padding: 8px 12px; font-size: 14px; }
 #heat.warm #heat-f { background: linear-gradient(90deg, #ff8a30, #ff3a20); } #heat.warm #heat-t { color: #ffb070; }
 #heat.oh #heat-f { background: #ff3a20; box-shadow: 0 0 8px rgba(255,60,30,.8); } #heat.oh #heat-t { color: #ff6a50; font-weight: bold; animation: blink .35s infinite alternate; }
 body.touch #heat { font-size: 11px; } body.touch #heat .bar { width: 72px; height: 6px; }
+
+/* =====================================================================
+   儀式：章節卷軸、戰功簿、冊封詔令、頭目終結（毛筆字＋紙張＋朱印）
+   ===================================================================== */
+:root { --brush: "DFKai-SB", "BiauKai", "TW-Kai", "Kaiti TC", "STKaiti", "KaiTi", "標楷體", "Noto Serif TC", serif; --ink: #2b1d12; --cinnabar: #b0261c;
+  --paper: radial-gradient(ellipse at 18% 8%, rgba(255,255,255,.35), transparent 60%), repeating-linear-gradient(90deg, rgba(120,80,30,.035) 0 2px, transparent 2px 7px), linear-gradient(#efe1bf, #e0cc9e); }
+#rite { position: fixed; inset: 0; z-index: 22; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 10px; background: radial-gradient(ellipse at center, rgba(10,6,3,.5), rgba(4,2,1,.82)); }
+#rite.rite-chapter { background: radial-gradient(ellipse at center, rgba(10,6,3,.25), rgba(4,2,1,.7)); cursor: pointer; }
+#rite .paper { background: var(--paper); color: var(--ink); box-shadow: 0 12px 44px rgba(0,0,0,.65), inset 0 0 44px rgba(120,80,30,.28); }
+#rite .btn-p { min-width: 150px; font-size: 16px; }
+/* 印章：直書由右而左，四字印排成兩行 */
+.seal { writing-mode: horizontal-tb; display: inline-grid; grid-template-columns: 1em; grid-auto-rows: 1em; gap: 2px; align-content: center; justify-content: center; background: var(--cinnabar); color: #fbeee0; font-family: var(--brush); line-height: 1; letter-spacing: 0; border-radius: 5px; padding: 6px;
+  box-shadow: inset 0 0 0 2px #fbeee0, inset 0 0 0 4px var(--cinnabar), 0 2px 6px rgba(0,0,0,.35); transform: rotate(-5deg); text-shadow: none; flex: none; }
+.seal i { font-style: normal; display: flex; align-items: center; justify-content: center; width: 1em; height: 1em; line-height: 1; } .seal.n4 { grid-template-columns: 1em 1em; }
+.seal.n2 { width: 40px; height: 66px; font-size: 25px; } .seal.n4 { width: 66px; height: 66px; font-size: 25px; }
+.seal.big.n2 { width: 56px; height: 96px; font-size: 36px; }
+#rite .seal.stamp, #rite .grade .seal { opacity: 0; }
+#rite.stamped .seal.stamp, #rite.stamped .grade .seal { animation: stampIn .3s cubic-bezier(.3,1.6,.5,1) forwards; }
+@keyframes stampIn { 0% { opacity: 0; transform: rotate(-5deg) scale(2.6); } 100% { opacity: 1; transform: rotate(-5deg) scale(1); } }
+@keyframes riseIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* 章節卷軸：從中間往兩側展開 */
+.scroll { position: relative; width: min(660px, 84vw); padding: 0 14px; }
+.scroll .paper { padding: 26px 30px 24px; text-align: center; clip-path: inset(0 50% 0 50%); animation: paperOpen .9s .1s cubic-bezier(.2,.8,.2,1) forwards; }
+.scroll .rod { position: absolute; top: -12px; bottom: -12px; width: 22px; border-radius: 11px; background: linear-gradient(90deg, #2e1c10, #8a5630 45%, #2e1c10); box-shadow: 0 4px 14px rgba(0,0,0,.6); animation: .9s .1s cubic-bezier(.2,.8,.2,1) forwards; }
+.scroll .rod::before, .scroll .rod::after { content: ''; position: absolute; left: 3px; right: 3px; height: 10px; border-radius: 3px; background: linear-gradient(#e8c060, #8a6420); }
+.scroll .rod::before { top: -6px; } .scroll .rod::after { bottom: -6px; }
+.scroll .rod.l { left: calc(50% - 22px); animation-name: rodL; } .scroll .rod.r { right: calc(50% - 22px); animation-name: rodR; }
+@keyframes paperOpen { to { clip-path: inset(0 0 0 0); } } @keyframes rodL { to { left: -6px; } } @keyframes rodR { to { right: -6px; } }
+.scroll .no { color: var(--cinnabar); font-family: var(--brush); font-size: 22px; letter-spacing: .3em; opacity: 0; animation: riseIn .5s .8s forwards; }
+.scroll .ttl { font-family: var(--brush); font-size: 56px; letter-spacing: .18em; line-height: 1.25; margin: 4px 0 8px; opacity: 0; animation: brushDown .7s .95s ease-out forwards; }
+.scroll .sub { font-size: 15px; color: #6a4a2a; letter-spacing: .08em; opacity: 0; animation: riseIn .5s 1.4s forwards; }
+.scroll .quote { margin-top: 12px; font-family: var(--brush); font-size: 19px; color: #4a3220; opacity: 0; animation: riseIn .6s 1.7s forwards; }
+@keyframes brushDown { from { opacity: 1; clip-path: inset(0 100% 0 0); } to { opacity: 1; clip-path: inset(0 0 0 0); } }
+#rite .tap { color: #d8c8a8; font-size: 12px; opacity: 0; animation: riseIn .5s 2s forwards; }
+/* 戰功簿 */
+.book { width: min(580px, 94vw); display: flex; flex-direction: column; align-items: center; gap: 12px; animation: riseIn .35s ease-out; }
+.book .paper { width: 100%; padding: 16px 22px 14px; border-radius: 4px; }
+.book .hd { display: flex; align-items: baseline; gap: 10px; border-bottom: 1px solid rgba(90,60,30,.35); padding-bottom: 8px; }
+.book .no { color: var(--cinnabar); font-family: var(--brush); font-size: 18px; } .book .ttl { font-family: var(--brush); font-size: 28px; letter-spacing: .08em; }
+.book .tag { margin-left: auto; font-size: 13px; letter-spacing: .3em; border: 1px solid rgba(90,60,30,.5); padding: 1px 6px 1px 9px; color: #5a3a1a; }
+.book .body { display: flex; align-items: center; gap: 18px; padding: 8px 0 4px; }
+.book .rows { flex: 1; display: grid; grid-template-columns: 1fr 1fr; column-gap: 22px; }
+.book .r { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px dashed rgba(90,60,30,.25); font-size: 14px; color: #5a4028; opacity: 0; animation: riseIn .35s forwards; }
+.book .r b { font-size: 16px; color: var(--ink); } .book .r.good b { color: #2f6a2a; } .book .r.bad b { color: var(--cinnabar); }
+.book .r:nth-child(1) { animation-delay: .1s; } .book .r:nth-child(2) { animation-delay: .2s; } .book .r:nth-child(3) { animation-delay: .3s; } .book .r:nth-child(4) { animation-delay: .4s; } .book .r:nth-child(5) { animation-delay: .5s; } .book .r:nth-child(6) { animation-delay: .6s; }
+.book .grade { display: flex; flex-direction: column; align-items: center; gap: 6px; color: #6a4a2a; font-size: 13px; letter-spacing: .3em; min-width: 70px; }
+.book .ft { font-size: 12.5px; color: #6a4a2a; padding-top: 6px; }
+/* 冊封詔令：直書的令，展開後蓋上官印 */
+.decree { display: flex; align-items: center; gap: 22px; width: min(780px, 96vw); justify-content: center; }
+.decree .paper { position: relative; writing-mode: vertical-rl; height: min(340px, 74vh); padding: 22px 20px 22px 92px; font-family: var(--brush); font-size: 21px; line-height: 1.7; letter-spacing: .12em; border-radius: 3px;
+  clip-path: inset(0 0 100% 0); animation: paperDown .8s .05s cubic-bezier(.2,.8,.2,1) forwards; border-top: 10px solid #6a4020; border-bottom: 10px solid #6a4020; }
+@keyframes paperDown { to { clip-path: inset(0 0 0 0); } }
+.decree .col { margin-left: 8px; opacity: 0; animation: riseIn .45s forwards; }
+.decree .col:nth-child(1) { animation-delay: .6s; } .decree .col:nth-child(2) { animation-delay: .8s; } .decree .col:nth-child(3) { animation-delay: 1s; } .decree .col:nth-child(4) { animation-delay: 1.15s; } .decree .col:nth-child(5) { animation-delay: 1.3s; }
+.decree .col.big { font-size: 48px; color: var(--cinnabar); margin-left: 16px; }
+.decree .col b { font-size: 32px; color: #7a1a12; margin-top: .3em; display: inline-block; }
+.decree .col.sign { font-size: 15px; text-align: end; color: #5a3a1a; }
+.decree .seal.stamp { position: absolute; left: 18px; bottom: 22px; }
+.decree .side { width: min(300px, 40vw); writing-mode: horizontal-tb; color: var(--ui-text, #f3ead6); animation: riseIn .5s 1.2s both; }
+.decree .new { font-size: 15px; color: #d8c8a8; letter-spacing: .1em; } .decree .new b { font-family: var(--brush); font-size: 34px; color: #ffd86a; letter-spacing: .12em; margin-left: 4px; }
+.decree .d { color: #c8b890; font-size: 13.5px; margin: 6px 0 10px; }
+.decree ul { margin: 0 0 14px; padding: 0; list-style: none; } .decree li { padding: 5px 0 5px 18px; position: relative; font-size: 14px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.decree li::before { content: ''; position: absolute; left: 2px; top: 11px; width: 8px; height: 8px; background: var(--cinnabar); transform: rotate(45deg); }
+/* 頭目終結：毛筆大字「斬　某某」＋朱印 */
+#rite-kill { position: fixed; inset: 0; z-index: 23; pointer-events: none; background: radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,.55)); }
+#rite-kill.on { animation: killFade 2.6s forwards; }
+@keyframes killFade { 0%, 78% { opacity: 1; } 100% { opacity: 0; } }
+#rite-kill .kc { position: absolute; left: 50%; top: 30%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 16px; white-space: nowrap; padding: 6px 70px;
+  background: linear-gradient(90deg, transparent, rgba(12,7,4,.8) 14%, rgba(12,7,4,.86) 50%, rgba(12,7,4,.8) 86%, transparent); animation: inkBand .35s ease-out both; } /* 一道墨痕當底，亮天空下也看得清楚 */
+@keyframes inkBand { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+#rite-kill .v { font-family: var(--brush); font-size: 128px; line-height: 1; color: #fff6e6; text-shadow: 0 0 2px #000, 0 0 30px rgba(220,40,20,.9), 0 0 60px rgba(220,40,20,.55); animation: brushFall .42s ease-out both; }
+#rite-kill .nm { font-family: var(--brush); font-size: 56px; color: #ffe2a8; letter-spacing: .15em; text-shadow: 0 0 3px #000, 0 4px 16px rgba(0,0,0,.85); animation: brushDown .5s .28s ease-out both; }
+#rite-kill .seal { animation: stampIn .3s .62s cubic-bezier(.3,1.6,.5,1) both; }
+@keyframes brushFall { from { opacity: 1; clip-path: inset(0 0 100% 0); transform: scale(1.15); } to { opacity: 1; clip-path: inset(0 0 0 0); transform: none; } }
+/* HUD：官職與戰功 */
+#rank-tag { display: flex; align-items: center; gap: 6px; font-size: 12.5px; padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,.08); }
+#rank-tag:empty { display: none; } #rank-tag b { color: var(--ui-gold-hi); } #rank-tag em { font-style: normal; color: var(--ui-dim); margin-left: auto; font-size: 11px; padding-left: 8px; }
+.seal-mini { display: inline-flex; width: 18px; height: 18px; align-items: center; justify-content: center; background: var(--cinnabar); color: #fbeee0; font-family: var(--brush); font-size: 12px; border-radius: 3px; box-shadow: inset 0 0 0 1px #fbeee0; text-shadow: none; }
+/* 手機 */
+body.touch #rank-tag { font-size: 10.5px; padding-bottom: 3px; gap: 4px; } body.touch #rank-tag em { font-size: 9.5px; } body.touch .seal-mini { width: 14px; height: 14px; font-size: 9px; }
+body.touch .scroll .paper { padding: 16px 20px; } body.touch .scroll .ttl { font-size: 40px; } body.touch .scroll .no { font-size: 17px; } body.touch .scroll .sub { font-size: 12.5px; } body.touch .scroll .quote { font-size: 15px; margin-top: 6px; }
+body.touch .book .paper { padding: 10px 16px; } body.touch .book .ttl { font-size: 22px; } body.touch .book .r { padding: 4px 0; font-size: 12.5px; } body.touch .book .r b { font-size: 14px; } body.touch .book { gap: 8px; }
+body.touch .decree .paper { font-size: 17px; padding: 14px 14px 14px 80px; } body.touch .decree .col.big { font-size: 38px; } body.touch .decree .col b { font-size: 26px; }
+body.touch .decree .new b { font-size: 28px; } body.touch .decree li { font-size: 12.5px; padding: 3px 0 3px 16px; } body.touch .decree .d { font-size: 12px; margin: 4px 0 6px; }
+body.touch #rite-kill .v { font-size: 88px; } body.touch #rite-kill .nm { font-size: 38px; }
+@media (orientation: portrait) { .decree { flex-direction: column; gap: 12px; } .decree .side { width: 86vw; } .decree .paper { height: min(300px, 42vh); } .book .rows { grid-template-columns: 1fr; } }
+.decree .col.sign { letter-spacing: .05em; padding-bottom: 4px; }
+body.touch .decree .col.sign { font-size: 12.5px; } body.touch .decree .col { line-height: 1.55; }
+body.touch #rite-kill .seal, body.touch #rite.stamped .seal.stamp, body.touch #rite.stamped .grade .seal { animation-name: stampInS; }
+@keyframes stampInS { 0% { opacity: 0; transform: rotate(-5deg) scale(1.7); } 100% { opacity: 1; transform: rotate(-5deg) scale(1); } }
+body.touch #rite-kill .kc { padding: 4px 40px; }

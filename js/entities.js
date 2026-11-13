@@ -9,6 +9,7 @@ import { damageTargets } from './world.js';
 import { raining } from './weather.js';
 import { bark, idleChatter, say } from './barks.js';
 import { diff } from './difficulty.js';
+import { noteLost } from './ranks.js';
 import { makeTorch, addEmitter, nightK } from './lights.js';
 const TV = new THREE.Vector3();
 // 友軍攻擊加成（劉備的「仁德激勵」）
@@ -188,7 +189,7 @@ export class Actor {
       if (f) bark(f, 'cheer', 0.2);
     }
     if (this.arena) { G.scene.remove(this.arena.mesh); this.arena = null; }
-    if (this.recruited) { this.follow = false; G.ui.msg(`${d.name} 陣亡了。（可再向主公招募）`, 'warn'); }
+    if (this.recruited) { noteLost(); this.follow = false; G.ui.msg(`${d.name} 陣亡了。（可再向主公招募）`, 'warn'); }
     if (this.faction === 'enemy') {
       const dr = d.drop;
       if (dr) {
@@ -283,6 +284,7 @@ export class Actor {
       }
       if (this.target && this.follow) { const [an, , drop] = this.leash(); if (d2(an, this.target.pos) > drop) this.target = null; }
       { const nt = this.findTarget(); if (nt) this.target = nt; } // 每次重新評估目標（敵人會改打靠近的隊友）
+      if (this.routT > 0) this.target = null; // 主將陣亡後潰逃，不再戀戰
       if (!this.roam && !this.follow && this.target && dist2(this.pos.x, this.pos.z, this.home.x, this.home.z) > (this.faction === 'ally' ? 45 : 150)) { this.target = null; this.alert = 0; }
     }
     if (!hadTarget && this.target) { // 發現敵人：吶喊、舉起兵器
@@ -294,7 +296,12 @@ export class Actor {
 
     let mx = 0, mz = 0, speed = 0, face = null, goal = null;
     const tg = this.target;
-    if (tg) {
+    if (this.routT > 0) { // 潰逃：往遠離玩家的方向跑，跑遠了就消失
+      this.routT -= dt; this.wind = 0;
+      const rx = this.pos.x - P.pos.x, rz = this.pos.z - P.pos.z, rl = Math.hypot(rx, rz) || 1;
+      mx = rx / rl; mz = rz / rl; speed = d.speed * 1.15;
+      if (this.routT <= 0) { if (rl > 35) { this.alive = false; this.gone = true; G.scene.remove(m.root); return; } this.routT = 3; }
+    } else if (tg) {
       const dx = tg.pos.x - this.pos.x, dz = tg.pos.z - this.pos.z, dist = Math.hypot(dx, dz) || 0.001;
       const reach = (d.reach || 2.3) * (this.scale > 1 ? 1.05 : 1) + (tg.radius || 0.4);
       face = Math.atan2(dx, dz);

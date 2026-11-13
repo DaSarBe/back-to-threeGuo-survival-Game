@@ -5,6 +5,7 @@ import { Actor, Attendant } from './entities.js';
 import { audio } from './audio.js';
 import { rnd } from './util.js';
 import { price, repTier } from './orders.js';
+import { rankCap } from './ranks.js';
 
 // 名將招攬費依哪位主公的聲望打折
 export const LORD_OF = { guanyu: 'liubei', zhangfei: 'liubei', zhaoyun: 'liubei', liubei: 'liubei', caocao: 'caocao', sunjian: 'sunjian' };
@@ -20,7 +21,7 @@ export const UNIT_DESC = {
   sq_danyang: '江東精兵，持盾極為耐打',
 };
 
-export const squadCap = () => SQUAD_CAP[Math.min(G.stage, SQUAD_CAP.length - 1)];
+export const squadCap = () => SQUAD_CAP[Math.min(G.stage, SQUAD_CAP.length - 1)] + rankCap(); // 官職也會增加名額
 export const followers = () => G.actors.filter(a => a.alive && a.follow);
 export const squadUsed = () => followers().reduce((n, a) => n + (a.def.general ? 2 : 1), 0);
 export const isUnlocked = id => !UNLOCK[id] || !!G.killed[UNLOCK[id]];

@@ -9,6 +9,7 @@ import { ITEMS } from './data.js';
 import { OR } from './orders.js';
 import { joined } from './akai.js';
 import { rnd, pick, makeLabel } from './util.js';
+import { addMerit } from './ranks.js';
 
 const MAX_LV = 5;
 const DF = () => G.flags.defense || (G.flags.defense = { lv: 0, day: 0, wins: 0 });
@@ -105,6 +106,7 @@ function finish(win, why) {
   if (d.lv >= 2) give('powder', d.lv);
   if (joined() && d.lv >= 3) give('parts', 1);
   OR.rep.liubei = (OR.rep.liubei || 0) + r.rep;
+  addMerit(10 + d.lv * 5, '守營成功', true);
   const st = DF(); st.wins++; if (st.lv < MAX_LV - 1 && d.lv > st.lv) st.lv = d.lv;
   audio.play('quest');
   G.ui.msg(`🏆 守營成功！${d.name}的軍旗屹立不倒（剩 ${Math.ceil(d.hp / d.maxHp * 100)}%）。`, 'quest');

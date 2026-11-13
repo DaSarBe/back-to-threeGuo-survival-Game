@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { G } from './state.js';
 import { world } from './world.js';
 import { pick, rnd, clamp } from './util.js';
+import { callYou } from './ranks.js';
 
 const FONT = '"Noto Serif TC","PMingLiU","Microsoft JhengHei","PingFang TC",serif';
 
@@ -110,7 +111,9 @@ export function groupOf(a) {
   return null;
 }
 const FIGHT = { spot: 1, attack: 1, kill: 1 };
+const ROUT = ['主將死了！快逃啊！', '敗了……敗了！', '撤！快撤！', '饒命啊！', '跑啊——！'];
 function linesFor(a, kind) {
+  if (kind === 'rout') return a.faction === 'enemy' ? ROUT : null;
   const g = groupOf(a); if (!g) return null;
   const own = LINES[g], base = a.faction === 'ally' && g !== 'ally' ? LINES.ally : null;
   if (own[kind]) return own[kind];
@@ -154,6 +157,7 @@ export function say(a, text, kind = 'idle', dur) {
     let vi = -1; for (let i = 0; i < active.length; i++) if (active[i].prio <= prio && (vi < 0 || active[i].prio < active[vi].prio)) vi = i; // 同級時擠掉最舊的
     if (vi < 0) return false; removeAt(vi);
   }
+  if (a.faction === 'ally') text = callYou(text); // 友軍依官職稱呼你（先生／司馬／都尉／將軍）
   const { tex, aspect } = bubbleTex(text, colorOf(a));
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0 }));
   sp.material.sizeAttenuation = false; sp.center.set(0.5, 0); sp.renderOrder = 5;
