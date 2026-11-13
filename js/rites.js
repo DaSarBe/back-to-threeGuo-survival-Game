@@ -38,6 +38,7 @@ export function updateRites(dt) {
   if (!G.started) return;
   // 沒有其他儀式排隊時，看看是否該升官（斬將後幾秒內先不檢查，讓戰功簿先出來）
   if (!queue.length && G.now - (G.bossT || -99) > 8 && pendingRank() >= 0 && !G.menu) queue.push({ type: 'promote' });
+  if (queue.length && queue[0].now && !G.menu) { show(queue.shift()); return; } // 開場卷軸：動畫一結束立刻展開
   if (!queue.length || G.menu || G.slow || killT > 0) { waitT = 0; return; }
   waitT += dt;
   if (!calm() && waitT < 25) return; // 還在打仗就再等等（最多 25 秒）

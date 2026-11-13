@@ -128,7 +128,7 @@ function start(save) {
 }
 function afterIntro() {
   ui.dirty = true;
-  rite({ type: 'chapter', stage: G.stage });
+  rite({ type: 'chapter', stage: G.stage, now: true });
   ui.msg('……頭好痛。這裡是哪裡？手機沒有訊號，四周只有荒野。', 'say');
   setTimeout(() => ui.msg('身旁有一只跟你一起掉下來的軍火箱，先打開看看。', 'say'), 3500);
   if (!G.touch && !document.pointerLockElement) ui.msg('點一下畫面，開始操控視角。', 'info');
