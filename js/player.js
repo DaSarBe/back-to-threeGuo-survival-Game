@@ -414,13 +414,24 @@ function updateViewModel(dt, w) {
 // =====================================================================
 export function initInput(canvas) {
   const P = player;
-  const lock = () => { if (!G.touch && !G.noLock && document.pointerLockElement !== canvas) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => { }); } catch (e) { } } };
+  // 鎖定滑鼠：瀏覽器要求「剛點擊或按鍵」才給鎖（Chrome 在我們自己解除鎖定後的短時間內例外）。
+  // 卷軸、劇情等靠計時器自動關閉時沒有手勢，這種自動重鎖失敗不代表環境不支援，不能因此永久關掉鎖定，只提示玩家點一下畫面。
+  let autoTry = false;
+  const lock = () => {
+    if (G.touch || G.noLock || document.pointerLockElement === canvas) return;
+    autoTry = !!(navigator.userActivation && !navigator.userActivation.isActive); // 沒有這個 API 的舊瀏覽器一律當作有手勢
+    try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => { }); } catch (e) { }
+  };
   G.lockPointer = lock;
   G.unlockPointer = () => { if (document.pointerLockElement) document.exitPointerLock(); };
   document.addEventListener('pointerlockchange', () => {
     if (document.pointerLockElement !== canvas) { mouse.l = mouse.r = false; if (!G.menu && !G.touch && !G.noLock) G.ui.open('pause'); }
+    else G.needClick = false;
   });
-  document.addEventListener('pointerlockerror', () => { G.noLock = true; if (!G.menu) G.ui.msg('無法鎖定滑鼠：請按住滑鼠右鍵拖曳來轉動視角。', 'warn'); });
+  document.addEventListener('pointerlockerror', () => {
+    if (autoTry) { G.needClick = true; if (!G.menu) G.ui.msg('點一下畫面，繼續操控視角。', 'info'); return; } // 自動重鎖被拒：點一下就能鎖
+    G.noLock = true; if (!G.menu) G.ui.msg('這個環境不允許鎖定滑鼠（內嵌預覽視窗常見）：請按住滑鼠右鍵拖曳來轉動視角，或改在獨立的網頁分頁開啟遊戲。', 'warn');
+  });
   const look = (dx, dy, s) => { P.yaw -= dx * s; P.pitch = clamp(P.pitch - dy * s, -1.5, 1.5); };
   document.addEventListener('mousemove', e => {
     if (G.menu) return;
